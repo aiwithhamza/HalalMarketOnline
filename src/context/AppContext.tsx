@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Product, CartItem, Order, OrderStatus, ShippingDetails, PaymentMethod, SUPPORTED_CURRENCIES, Notification } from '../types';
-import { io } from 'socket.io-client';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { User, Product, CartItem, Order, OrderStatus, ShippingDetails, PaymentMethod, SUPPORTED_CURRENCIES, Notification, ChatMessage, ChatConversation } from '../types';
+import { io, Socket } from 'socket.io-client';
 
 const EXCHANGE_RATES: Record<string, number> = {
   USD: 1,
@@ -58,6 +58,13 @@ interface AppContextType {
   isAuthReady: boolean;
   notifications: Notification[];
   markNotificationAsRead: (id: string) => Promise<void>;
+  conversations: ChatConversation[];
+  activeMessages: ChatMessage[];
+  activeChatUserId: string | null;
+  setActiveChatUserId: (id: string | null) => void;
+  fetchConversations: () => Promise<void>;
+  fetchMessages: (otherUserId: string) => Promise<void>;
+  sendMessage: (receiverId: string, content: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -103,6 +110,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [adminStats, setAdminStats] = useState<any>(null);
   const [adminVendors, setAdminVendors] = useState<User[]>([]);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
+  const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
+
+  const activeChatUserIdRef = useRef<string | null>(null);
+  const currentUserRef = useRef<User | null>(null);
+
+  useEffect(() => {
+    activeChatUserIdRef.current = activeChatUserId;
+  }, [activeChatUserId]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   const handleResponse = async (res: Response) => {
     const contentType = res.headers.get('content-type');
@@ -208,26 +230,53 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (token) {
       fetchOrders();
       fetchNotifications();
+      fetchConversations();
       if (currentUser?.role === 'admin') {
         fetchAdminStats();
         fetchAdminVendors();
       }
     }
 
-    const socket = io();
-    socket.on('products_updated', fetchProducts);
-    socket.on('vendors_updated', fetchVendors);
-    socket.on('orders_updated', () => {
+    const newSocket = io();
+    setSocket(newSocket);
+
+    if (currentUser) {
+      newSocket.emit('join', currentUser.id);
+    }
+
+    newSocket.on('products_updated', fetchProducts);
+    newSocket.on('vendors_updated', fetchVendors);
+    newSocket.on('orders_updated', () => {
       if (token) fetchOrders();
     });
-    socket.on('notifications_updated', () => {
+    newSocket.on('notifications_updated', () => {
       if (token) fetchNotifications();
+    });
+    newSocket.on('new_message', (message: ChatMessage) => {
+      const activeId = activeChatUserIdRef.current;
+      const currentUserId = currentUserRef.current?.id;
+      
+      // If the message is for the current active chat, add it to activeMessages
+      setActiveMessages(prev => {
+        const isFromActive = message.senderId === activeId;
+        const isToActive = message.receiverId === activeId;
+        const isFromMe = message.senderId === currentUserId;
+        const isToMe = message.receiverId === currentUserId;
+
+        if ((isFromActive && isToMe) || (isFromMe && isToActive)) {
+          if (prev.find(m => m.id === message.id)) return prev;
+          return [...prev, message];
+        }
+        return prev;
+      });
+      // Always refresh conversations list
+      fetchConversations();
     });
 
     return () => {
-      socket.disconnect();
+      newSocket.disconnect();
     };
-  }, [token]);
+  }, [token, currentUser?.id]);
 
   useEffect(() => {
     localStorage.setItem('halal_cart', JSON.stringify(cart));
@@ -469,6 +518,53 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const fetchConversations = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/chat/conversations', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setConversations(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchMessages = async (otherUserId: string) => {
+    if (!token) return;
+    setActiveChatUserId(otherUserId);
+    try {
+      const res = await fetch(`/api/chat/messages/${otherUserId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setActiveMessages(await handleResponse(res));
+        fetchConversations(); // Refresh unread counts
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const sendMessage = async (receiverId: string, content: string) => {
+    if (!token || !content.trim()) return;
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ receiverId, content })
+      });
+      if (res.ok) {
+        // Message will be added via socket event
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -501,7 +597,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       customers,
       isAuthReady,
       notifications,
-      markNotificationAsRead
+      markNotificationAsRead,
+      conversations,
+      activeMessages,
+      activeChatUserId,
+      setActiveChatUserId,
+      fetchConversations,
+      fetchMessages,
+      sendMessage
     }}>
       {children}
     </AppContext.Provider>

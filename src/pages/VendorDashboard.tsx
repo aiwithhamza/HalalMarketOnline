@@ -1,19 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
   Plus, Edit2, Trash2, Package, DollarSign, ShoppingBag, 
   Clock, CheckCircle, Truck, MapPin, X, TrendingUp, 
-  AlertTriangle, BarChart2, LayoutDashboard
+  AlertTriangle, BarChart2, LayoutDashboard, MessageSquare
 } from 'lucide-react';
 import { Product, OrderStatus, ProductVariation, SUPPORTED_CURRENCIES } from '../types';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
+import ChatList from '../components/chat/ChatList';
+import ChatWindow from '../components/chat/ChatWindow';
 
 export default function VendorDashboard() {
-  const { currentUser, products, addProduct, updateProduct, deleteProduct, orders, updateOrderStatus, updateVendorProfile, formatPrice, convertPrice } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'profile'>('dashboard');
+  const { currentUser, products, addProduct, updateProduct, deleteProduct, orders, updateOrderStatus, updateVendorProfile, formatPrice, convertPrice, conversations } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'profile' | 'messages'>('dashboard');
+  const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const state = location.state as { activeTab?: string, openChatWith?: string };
+    if (state?.openChatWith) {
+      setActiveTab('messages');
+      setSelectedChatUserId(state.openChatWith);
+      navigate(location.pathname, { replace: true, state: {} });
+    } else if (state?.activeTab) {
+      setActiveTab(state.activeTab as any);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [statusModal, setStatusModal] = useState<{ orderId: string, status: OrderStatus, description: string } | null>(null);
@@ -379,6 +396,17 @@ export default function VendorDashboard() {
           >
             Store Profile
           </button>
+          <button 
+            onClick={() => setActiveTab('messages')}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'messages' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <div className="flex items-center gap-2">
+              Messages
+              {conversations.some(c => c.unreadCount > 0) && (
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              )}
+            </div>
+          </button>
         </div>
       </div>
 
@@ -414,6 +442,28 @@ export default function VendorDashboard() {
               <p className="text-sm text-gray-500 font-medium">Active Products</p>
               <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Messages Tab */}
+      {activeTab === 'messages' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
+          <div className="lg:col-span-1 overflow-y-auto">
+            <ChatList onSelect={setSelectedChatUserId} activeUserId={selectedChatUserId || undefined} />
+          </div>
+          <div className="lg:col-span-2 h-full">
+            {selectedChatUserId ? (
+              <ChatWindow otherUserId={selectedChatUserId} onClose={() => setSelectedChatUserId(null)} />
+            ) : (
+              <div className="h-full bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center p-12">
+                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center text-green-600 mb-4">
+                  <MessageSquare className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Select a conversation</h3>
+                <p className="text-gray-500">Pick a customer from the list to start chatting.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

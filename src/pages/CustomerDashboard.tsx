@@ -1,17 +1,34 @@
-import React, { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
   Package, Clock, CheckCircle, Truck, MapPin, 
   CreditCard, Banknote, User as UserIcon, Heart, 
-  Settings, ShoppingBag, ChevronRight, Star
+  Settings, ShoppingBag, ChevronRight, Star, MessageSquare
 } from 'lucide-react';
 import { OrderStatus } from '../types';
+import ChatList from '../components/chat/ChatList';
+import ChatWindow from '../components/chat/ChatWindow';
 
 export default function CustomerDashboard() {
-  const { currentUser, orders, products, formatPrice, updateUserProfile, toggleWishlist } = useAppContext();
+  const { currentUser, orders, products, formatPrice, updateUserProfile, toggleWishlist, conversations, sendMessage } = useAppContext();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'profile'>('orders');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'profile' | 'messages'>('orders');
+  const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const state = location.state as { openChatWith?: string, activeTab?: string };
+    if (state?.openChatWith) {
+      setActiveTab('messages');
+      setSelectedChatUserId(state.openChatWith);
+      // Clear state to avoid reopening on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    } else if (state?.activeTab) {
+      setActiveTab(state.activeTab as any);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state]);
 
   const [profileData, setProfileData] = useState({
     name: currentUser?.name || '',
@@ -97,6 +114,18 @@ export default function CustomerDashboard() {
           >
             <Heart className="w-5 h-5" />
             Wishlist
+          </button>
+          <button 
+            onClick={() => setActiveTab('messages')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'messages' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <div className="relative">
+              <MessageSquare className="w-5 h-5" />
+              {conversations.some(c => c.unreadCount > 0) && (
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></div>
+              )}
+            </div>
+            Messages
           </button>
           <button 
             onClick={() => setActiveTab('profile')}
@@ -316,6 +345,27 @@ export default function CustomerDashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'messages' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
+              <div className="lg:col-span-1 overflow-y-auto">
+                <ChatList onSelect={setSelectedChatUserId} activeUserId={selectedChatUserId || undefined} />
+              </div>
+              <div className="lg:col-span-2 h-full">
+                {selectedChatUserId ? (
+                  <ChatWindow otherUserId={selectedChatUserId} onClose={() => setSelectedChatUserId(null)} />
+                ) : (
+                  <div className="h-full bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center p-12">
+                    <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center text-green-600 mb-4">
+                      <MessageSquare className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Select a conversation</h3>
+                    <p className="text-gray-500">Pick a vendor from the list to start chatting.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

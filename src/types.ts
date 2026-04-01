@@ -133,3 +133,24 @@ export interface Order {
   history?: OrderStatusUpdate[];
 }
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ChatConversation {
+  otherUser: {
+    id: string;
+    name: string;
+    profileImage?: string;
+    role: Role;
+    storeName?: string;
+  };
+  lastMessage: ChatMessage;
+  unreadCount: number;
+}
+

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, Store, ShoppingCart, Check, AlertCircle, CheckCircle, MapPin, Tag } from 'lucide-react';
+import { ArrowLeft, Store, ShoppingCart, Check, AlertCircle, CheckCircle, MapPin, Tag, MessageSquare } from 'lucide-react';
 
 export default function ProductDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { products, addToCart, formatPrice } = useAppContext();
+  const { products, addToCart, formatPrice, currentUser } = useAppContext();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
@@ -170,8 +170,8 @@ export default function ProductDetails() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden w-full sm:w-auto">
                 <button 
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   className="px-4 py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
@@ -194,7 +194,7 @@ export default function ProductDetails() {
               <button 
                 onClick={handleAddToCart}
                 disabled={product.stock === 0}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-lg font-semibold transition-all ${
+                className={`flex-1 w-full flex items-center justify-center gap-2 py-3 px-6 rounded-lg font-semibold transition-all ${
                   product.stock === 0 
                     ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     : added 
@@ -213,6 +213,20 @@ export default function ProductDetails() {
                 )}
               </button>
             </div>
+
+            <button 
+              onClick={() => {
+                if (!currentUser) {
+                  navigate('/login');
+                  return;
+                }
+                const path = currentUser.role === 'vendor' ? '/vendor' : '/customer';
+                navigate(path, { state: { openChatWith: product.vendorId } });
+              }}
+              className="w-full mt-4 flex items-center justify-center gap-2 py-3 px-6 rounded-lg font-semibold border-2 border-green-600 text-green-600 hover:bg-green-50 transition-all"
+            >
+              <MessageSquare className="w-5 h-5" /> Chat with Vendor
+            </button>
           </div>
         </div>
       </div>

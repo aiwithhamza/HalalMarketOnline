@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Store, User as UserIcon, LogOut, Menu, X, Package, Search, MapPin, ChevronDown, Globe, Bell } from 'lucide-react';
+import { ShoppingCart, Store, User as UserIcon, LogOut, Menu, X, Package, Search, MapPin, ChevronDown, Globe, Bell, MessageSquare } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { SUPPORTED_CURRENCIES } from '../types';
 
 export default function Layout() {
-  const { currentUser, logout, cart, isAuthReady, preferredCurrency, setPreferredCurrency, notifications, markNotificationAsRead } = useAppContext();
+  const { currentUser, logout, cart, isAuthReady, preferredCurrency, setPreferredCurrency, notifications, markNotificationAsRead, conversations } = useAppContext();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,6 +28,7 @@ export default function Layout() {
   const currentCurrency = SUPPORTED_CURRENCIES.find(c => c.code === preferredCurrency) || SUPPORTED_CURRENCIES[0];
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadMessagesCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
@@ -88,6 +89,14 @@ export default function Layout() {
                       <p className="font-bold">Your Account</p>
                     </div>
                     <Link to="/customer" className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700">Your Orders</Link>
+                    <Link to="/customer" state={{ activeTab: 'messages' }} className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700 flex justify-between items-center">
+                      Messages
+                      {unreadMessagesCount > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                          {unreadMessagesCount}
+                        </span>
+                      )}
+                    </Link>
                     {currentUser.role === 'vendor' && (
                       <Link to="/vendor" className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700">Vendor Dashboard</Link>
                     )}
@@ -126,6 +135,25 @@ export default function Layout() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Messages */}
+              {currentUser && (
+                <Link 
+                  to={currentUser.role === 'vendor' ? "/vendor" : "/customer"} 
+                  state={{ activeTab: 'messages' }}
+                  className="flex items-center gap-1 hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm transition-all relative flex-shrink-0"
+                >
+                  <div className="relative">
+                    <MessageSquare className="w-6 h-6 text-emerald-200" />
+                    {unreadMessagesCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold w-3.5 h-3.5 flex items-center justify-center rounded-full border border-emerald-900">
+                        {unreadMessagesCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="hidden lg:block text-sm font-bold text-white ml-1">Messages</span>
+                </Link>
               )}
 
               {/* Cart */}
@@ -285,6 +313,19 @@ export default function Layout() {
               
               {currentUser ? (
                 <>
+                  <Link 
+                    to={currentUser.role === 'vendor' ? "/vendor" : "/customer"} 
+                    state={{ activeTab: 'messages' }}
+                    onClick={() => setIsMobileMenuOpen(false)} 
+                    className="block py-2 text-white hover:text-green-400 flex justify-between items-center"
+                  >
+                    Messages
+                    {unreadMessagesCount > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        {unreadMessagesCount}
+                      </span>
+                    )}
+                  </Link>
                   {currentUser.role === 'vendor' ? (
                     <Link to="/vendor" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-white hover:text-green-400">Vendor Dashboard</Link>
                   ) : (

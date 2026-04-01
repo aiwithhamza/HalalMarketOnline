@@ -100,6 +100,15 @@ db.exec(`
     description TEXT,
     timestamp TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    senderId TEXT,
+    receiverId TEXT,
+    content TEXT,
+    isRead INTEGER DEFAULT 0,
+    createdAt TEXT
+  );
 `);
 
 // Migration: Ensure all required columns exist in the tables
@@ -465,9 +474,95 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Chat
+  app.get('/api/chat/conversations', authenticateToken, (req: any, res: any) => {
+    const userId = req.user.id;
+    // Get unique users that the current user has chatted with
+    const stmt = db.prepare(`
+      SELECT DISTINCT 
+        CASE WHEN senderId = ? THEN receiverId ELSE senderId END as otherUserId
+      FROM messages 
+      WHERE senderId = ? OR receiverId = ?
+    `);
+    const otherUsers = stmt.all(userId, userId, userId) as any[];
+    
+    const conversations = otherUsers.map(u => {
+      const otherUserId = u.otherUserId;
+      const otherUser = db.prepare('SELECT id, name, profileImage, role, storeName FROM users WHERE id = ?').get(otherUserId) as any;
+      
+      const lastMessage = db.prepare(`
+        SELECT * FROM messages 
+        WHERE (senderId = ? AND receiverId = ?) OR (senderId = ? AND receiverId = ?)
+        ORDER BY createdAt DESC LIMIT 1
+      `).get(userId, otherUserId, otherUserId, userId) as any;
+      
+      const unreadCount = db.prepare(`
+        SELECT COUNT(*) as count FROM messages 
+        WHERE senderId = ? AND receiverId = ? AND isRead = 0
+      `).get(otherUserId, userId) as any;
+      
+      return {
+        otherUser,
+        lastMessage: {
+          ...lastMessage,
+          isRead: Boolean(lastMessage.isRead)
+        },
+        unreadCount: unreadCount.count
+      };
+    });
+    
+    // Sort by last message time
+    conversations.sort((a, b) => new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime());
+    
+    res.json(conversations);
+  });
+
+  app.get('/api/chat/messages/:otherUserId', authenticateToken, (req: any, res: any) => {
+    const userId = req.user.id;
+    const otherUserId = req.params.otherUserId;
+    
+    const stmt = db.prepare(`
+      SELECT * FROM messages 
+      WHERE (senderId = ? AND receiverId = ?) OR (senderId = ? AND receiverId = ?)
+      ORDER BY createdAt ASC
+    `);
+    const messages = stmt.all(userId, otherUserId, otherUserId, userId).map((m: any) => ({
+      ...m,
+      isRead: Boolean(m.isRead)
+    }));
+    
+    // Mark as read
+    db.prepare('UPDATE messages SET isRead = 1 WHERE senderId = ? AND receiverId = ?').run(otherUserId, userId);
+    
+    res.json(messages);
+  });
+
+  app.post('/api/chat/send', authenticateToken, (req: any, res: any) => {
+    const { receiverId, content } = req.body;
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+    
+    const stmt = db.prepare('INSERT INTO messages (id, senderId, receiverId, content, createdAt) VALUES (?, ?, ?, ?, ?)');
+    stmt.run(id, req.user.id, receiverId, content, createdAt);
+    
+    const message = { id, senderId: req.user.id, receiverId, content, isRead: false, createdAt };
+    
+    // Emit to both sender and receiver
+    io.to(receiverId).emit('new_message', message);
+    io.to(req.user.id).emit('new_message', message);
+    
+    res.json(message);
+  });
+
   // Socket.io connection
   io.on('connection', (socket) => {
     console.log('Client connected');
+    
+    socket.on('join', (userId) => {
+      socket.join(userId);
+      console.log(`User ${userId} joined their room`);
+    });
+
     socket.on('disconnect', () => {
       console.log('Client disconnected');
     });
