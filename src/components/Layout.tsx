@@ -209,7 +209,7 @@ export default function Layout() {
               <Link to="/vendors" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm font-bold text-green-400 flex-shrink-0">Our Vendors</Link>
               <Link to="/" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0">Today's Deals</Link>
               <Link to="/" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0 hidden sm:block">Halal Fresh</Link>
-              <Link to="/" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0 hidden md:block">Customer Service</Link>
+              <Link to="/help" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0 hidden md:block">Customer Service</Link>
             </div>
 
             {/* Secondary Right Nav (Moved from Top Bar) */}
@@ -358,38 +358,38 @@ export default function Layout() {
           <div>
             <h4 className="font-bold mb-4 text-lg">Get to Know Us</h4>
             <ul className="space-y-2 text-sm text-gray-300">
-              <li><a href="#" className="hover:underline">Careers</a></li>
-              <li><a href="#" className="hover:underline">Blog</a></li>
-              <li><a href="#" className="hover:underline">About Halal Market</a></li>
-              <li><a href="#" className="hover:underline">Investor Relations</a></li>
+              <li><Link to="/about" className="hover:underline">About Halal Market</Link></li>
+              <li><Link to="/help" className="hover:underline">Careers</Link></li>
+              <li><Link to="/help" className="hover:underline">Blog</Link></li>
+              <li><Link to="/help" className="hover:underline">Investor Relations</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="font-bold mb-4 text-lg">Make Money with Us</h4>
             <ul className="space-y-2 text-sm text-gray-300">
               <li><Link to="/login?mode=signup&role=vendor" className="hover:underline">Sell products on Halal Market</Link></li>
-              <li><a href="#" className="hover:underline">Sell on Halal Business</a></li>
-              <li><a href="#" className="hover:underline">Become an Affiliate</a></li>
-              <li><a href="#" className="hover:underline">Advertise Your Products</a></li>
+              <li><Link to="/login?mode=signup&role=vendor" className="hover:underline">Sell on Halal Business</Link></li>
+              <li><Link to="/login?mode=signup&role=vendor" className="hover:underline">Become an Affiliate</Link></li>
+              <li><Link to="/login?mode=signup&role=vendor" className="hover:underline">Advertise Your Products</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="font-bold mb-4 text-lg">Halal Payment Products</h4>
             <ul className="space-y-2 text-sm text-gray-300">
-              <li><a href="#" className="hover:underline">Halal Market Rewards Visa</a></li>
-              <li><a href="#" className="hover:underline">Halal.com Store Card</a></li>
-              <li><a href="#" className="hover:underline">Shop with Points</a></li>
-              <li><a href="#" className="hover:underline">Reload Your Balance</a></li>
+              <li><Link to="/help" className="hover:underline">Halal Market Rewards Visa</Link></li>
+              <li><Link to="/help" className="hover:underline">Halal.com Store Card</Link></li>
+              <li><Link to="/help" className="hover:underline">Shop with Points</Link></li>
+              <li><Link to="/help" className="hover:underline">Reload Your Balance</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="font-bold mb-4 text-lg">Let Us Help You</h4>
             <ul className="space-y-2 text-sm text-gray-300">
-              <li><a href="#" className="hover:underline">Your Account</a></li>
-              <li><a href="#" className="hover:underline">Your Orders</a></li>
-              <li><a href="#" className="hover:underline">Shipping Rates & Policies</a></li>
-              <li><a href="#" className="hover:underline">Returns & Replacements</a></li>
-              <li><a href="#" className="hover:underline">Help</a></li>
+              <li><Link to={currentUser ? (currentUser.role === 'vendor' ? "/vendor" : "/customer") : "/login"} className="hover:underline">Your Account</Link></li>
+              <li><Link to={currentUser ? (currentUser.role === 'vendor' ? "/vendor" : "/customer") : "/login"} className="hover:underline">Your Orders</Link></li>
+              <li><Link to="/help" className="hover:underline">Shipping Rates & Policies</Link></li>
+              <li><Link to="/help" className="hover:underline">Returns & Replacements</Link></li>
+              <li><Link to="/help" className="hover:underline">Help</Link></li>
             </ul>
           </div>
         </div>
@@ -400,9 +400,9 @@ export default function Layout() {
             <span className="font-bold text-xl tracking-tight text-white">Halal Market Online</span>
           </Link>
           <div className="flex gap-4 text-sm text-gray-300">
-            <a href="#" className="hover:underline">Conditions of Use</a>
-            <a href="#" className="hover:underline">Privacy Notice</a>
-            <a href="#" className="hover:underline">Consumer Health Data Privacy Disclosure</a>
+            <Link to="/privacy" className="hover:underline">Conditions of Use</Link>
+            <Link to="/privacy" className="hover:underline">Privacy Notice</Link>
+            <Link to="/privacy" className="hover:underline">Consumer Health Data Privacy Disclosure</Link>
           </div>
           <p className="mt-4 text-sm text-gray-400">
             &copy; {new Date().getFullYear()}, HalalMarketOnline.com, Inc. or its affiliates
