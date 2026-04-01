@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Plus, Edit2, Trash2, Package, DollarSign, ShoppingBag, Clock, CheckCircle, Truck, MapPin, X } from 'lucide-react';
+import { 
+  Plus, Edit2, Trash2, Package, DollarSign, ShoppingBag, 
+  Clock, CheckCircle, Truck, MapPin, X, TrendingUp, 
+  AlertTriangle, BarChart2, LayoutDashboard
+} from 'lucide-react';
 import { Product, OrderStatus, ProductVariation, SUPPORTED_CURRENCIES } from '../types';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+} from 'recharts';
 
 export default function VendorDashboard() {
   const { currentUser, products, addProduct, updateProduct, deleteProduct, orders, updateOrderStatus, updateVendorProfile, formatPrice, convertPrice } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'profile'>('products');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'profile'>('dashboard');
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [statusModal, setStatusModal] = useState<{ orderId: string, status: OrderStatus, description: string } | null>(null);
@@ -59,15 +66,190 @@ export default function VendorDashboard() {
   const myProducts = products.filter(p => p.vendorId === currentUser.id);
   const myOrders = orders.filter(o => o.vendorId === currentUser.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const totalRevenue = myOrders.reduce((sum, order) => {
-    // Convert order amount to USD for a consistent total, then formatPrice will handle display
+  // Analytics Data
+  const totalRevenue = myOrders.filter(o => o.status === 'delivered').reduce((sum, order) => {
     const orderCurrency = order.items[0]?.product?.currency || 'USD';
     return sum + convertPrice(order.totalAmount, orderCurrency, 'USD');
   }, 0);
+  
   const totalOrders = myOrders.length;
   const totalProducts = myProducts.length;
+  const pendingOrders = myOrders.filter(o => o.status === 'pending').length;
+  const lowStockProducts = myProducts.filter(p => p.stock < 10);
 
-  const currencySymbol = myOrders[0]?.items[0]?.product?.currency || 'USD';
+  // Generate chart data from orders
+  const chartData = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - i));
+    const dateStr = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dayOrders = myOrders.filter(o => 
+      new Date(o.createdAt).toLocaleDateString() === date.toLocaleDateString() && 
+      o.status === 'delivered'
+    );
+    const amount = dayOrders.reduce((sum, o) => {
+      const orderCurrency = o.items[0]?.product?.currency || 'USD';
+      return sum + convertPrice(o.totalAmount, orderCurrency, 'USD');
+    }, 0);
+    return { name: dateStr, sales: amount };
+  });
+
+  const renderDashboard = () => (
+    <div className="space-y-8">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-green-100 rounded-xl text-green-600">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Total Revenue</p>
+              <p className="text-2xl font-bold text-gray-900">{formatPrice(totalRevenue, 'USD')}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
+              <ShoppingBag className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Total Orders</p>
+              <p className="text-2xl font-bold text-gray-900">{myOrders.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-yellow-100 rounded-xl text-yellow-600">
+              <Clock className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Pending Orders</p>
+              <p className="text-2xl font-bold text-gray-900">{pendingOrders}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-red-100 rounded-xl text-red-600">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Low Stock Items</p>
+              <p className="text-2xl font-bold text-gray-900">{lowStockProducts.length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Sales Chart */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-gray-900">Sales Performance (Last 7 Days)</h3>
+            <div className="flex gap-2">
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div> Sales (USD)
+              </span>
+            </div>
+          </div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
+                />
+                <Area type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Low Stock Alerts */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="text-lg font-bold text-gray-900 mb-6">Inventory Alerts</h3>
+          <div className="space-y-4">
+            {lowStockProducts.length > 0 ? (
+              lowStockProducts.map(product => (
+                <div key={product.id} className="flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-100">
+                  <div className="flex items-center gap-3">
+                    <img src={product.imageUrl} alt={product.name} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 line-clamp-1">{product.name}</p>
+                      <p className="text-xs text-red-600 font-bold">{product.stock} left in stock</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => { setActiveTab('products'); handleEditClick(product); }}
+                    className="p-2 text-gray-400 hover:text-gray-600"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <CheckCircle className="w-12 h-12 text-green-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">All products are well stocked!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Orders */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-lg font-bold text-gray-900">Recent Orders</h3>
+          <button onClick={() => setActiveTab('orders')} className="text-sm text-green-600 font-medium hover:underline">View All</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+              <tr>
+                <th className="px-6 py-4 font-semibold">Order ID</th>
+                <th className="px-6 py-4 font-semibold">Customer</th>
+                <th className="px-6 py-4 font-semibold">Amount</th>
+                <th className="px-6 py-4 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {myOrders.slice(0, 5).map(order => (
+                <tr key={order.id}>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">#{order.id.slice(0, 8).toUpperCase()}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{order.customerName}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.product?.currency)}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
+                      order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {order.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -174,6 +356,12 @@ export default function VendorDashboard() {
         
         <div className="flex bg-gray-100 p-1 rounded-lg">
           <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Dashboard
+          </button>
+          <button 
             onClick={() => setActiveTab('products')}
             className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'products' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -194,36 +382,41 @@ export default function VendorDashboard() {
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-            <DollarSign className="w-6 h-6 text-green-600" />
+      {/* Dashboard Tab */}
+      {activeTab === 'dashboard' && renderDashboard()}
+
+      {/* Stats Overview - Only show on other tabs if needed, but we have a dedicated dashboard now */}
+      {activeTab !== 'dashboard' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <DollarSign className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Total Revenue</p>
+              <p className="text-2xl font-bold text-gray-900">{formatPrice(totalRevenue, 'USD')}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Total Revenue</p>
-            <p className="text-2xl font-bold text-gray-900">{formatPrice(totalRevenue, 'USD')}</p>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <ShoppingBag className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Total Orders</p>
+              <p className="text-2xl font-bold text-gray-900">{totalOrders}</p>
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+              <Package className="w-6 h-6 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Active Products</p>
+              <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
+            </div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-            <ShoppingBag className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Total Orders</p>
-            <p className="text-2xl font-bold text-gray-900">{totalOrders}</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-            <Package className="w-6 h-6 text-purple-600" />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Active Products</p>
-            <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Products Tab */}
       {activeTab === 'products' && (

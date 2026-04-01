@@ -1,18 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Package, Clock, CheckCircle, Truck, MapPin, CreditCard, Banknote } from 'lucide-react';
+import { 
+  Package, Clock, CheckCircle, Truck, MapPin, 
+  CreditCard, Banknote, User as UserIcon, Heart, 
+  Settings, ShoppingBag, ChevronRight, Star
+} from 'lucide-react';
 import { OrderStatus } from '../types';
 
 export default function CustomerDashboard() {
-  const { currentUser, orders, formatPrice } = useAppContext();
+  const { currentUser, orders, products, formatPrice, updateUserProfile, toggleWishlist } = useAppContext();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'profile'>('orders');
+
+  const [profileData, setProfileData] = useState({
+    name: currentUser?.name || '',
+    email: currentUser?.email || '',
+    profileImage: currentUser?.profileImage || ''
+  });
 
   if (!currentUser) {
     return <Navigate to="/login" />;
   }
 
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setProfileData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await updateUserProfile(profileData);
+    alert('Profile updated successfully!');
+  };
+
   const myOrders = orders.filter(o => o.customerId === currentUser.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const wishlistProducts = products.filter(p => currentUser.wishlist?.includes(p.id));
 
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
@@ -43,145 +66,311 @@ export default function CustomerDashboard() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
-        <p className="text-gray-500 mt-2">Track and manage your halal market orders.</p>
-      </div>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Sidebar */}
+        <div className="w-full md:w-64 space-y-2">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 text-center">
+            <div className="relative inline-block mb-4">
+              <img 
+                src={currentUser.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=10b981&color=fff`} 
+                alt={currentUser.name} 
+                className="w-20 h-20 rounded-full object-cover border-4 border-green-50"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
+            </div>
+            <h2 className="font-bold text-gray-900 line-clamp-1">{currentUser.name}</h2>
+            <p className="text-xs text-gray-500 mt-1">{currentUser.email}</p>
+          </div>
 
-      {myOrders.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">No orders yet</h2>
-          <p className="text-gray-500">When you place an order, it will appear here.</p>
+          <button 
+            onClick={() => setActiveTab('orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'orders' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            My Orders
+          </button>
+          <button 
+            onClick={() => setActiveTab('wishlist')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'wishlist' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Heart className="w-5 h-5" />
+            Wishlist
+          </button>
+          <button 
+            onClick={() => setActiveTab('profile')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'profile' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Settings className="w-5 h-5" />
+            Account Settings
+          </button>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {myOrders.map(order => {
-            const currentStepIndex = getStepIndex(order.status);
-            
-            return (
-              <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Order #{order.id.slice(0, 8).toUpperCase()}</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      Placed on {new Date(order.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500 mb-1">Total Amount</p>
-                      <p className="font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.product?.currency)}</p>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5 capitalize ${getStatusColor(order.status)}`}>
-                      {getStatusIcon(order.status)}
-                      {order.status}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Status Tracker */}
-                <div className="px-6 py-8 border-b border-gray-100">
-                  <div className="relative">
-                    <div className="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-gray-200">
-                      <div 
-                        style={{ width: `${(currentStepIndex / (STATUS_STEPS.length - 1)) * 100}%` }} 
-                        className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500 transition-all duration-500"
-                      ></div>
-                    </div>
-                    <div className="flex justify-between text-xs font-medium text-gray-500 px-1">
-                      {STATUS_STEPS.map((step, index) => (
-                        <div key={step} className={`flex flex-col items-center w-1/5 ${index <= currentStepIndex ? 'text-green-600' : ''}`}>
-                          <span className="capitalize mt-1 hidden sm:block">{step}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
 
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Order Items */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Items</h4>
-                    <div className="space-y-3">
-                      {order.items.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-green-50 rounded flex items-center justify-center text-green-700 font-bold text-sm">
-                              {item.quantity}x
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-900 block">{item.productName}</span>
-                              {item.selectedVariations && Object.keys(item.selectedVariations).length > 0 && (
-                                <span className="text-xs text-gray-500">
-                                  {Object.entries(item.selectedVariations).map(([k, v]) => `${k}: ${v}`).join(', ')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-gray-600">{formatPrice(item.price * item.quantity, item.product?.currency)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Shipping & Payment Details */}
-                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Order Details</h4>
-                    
-                    {order.shippingDetails && (
-                      <div className="mb-4">
-                        <p className="text-xs text-gray-500 mb-1">Shipping Address</p>
-                        <p className="text-sm text-gray-900 font-medium">{order.shippingDetails.fullName}</p>
-                        <p className="text-sm text-gray-600">{order.shippingDetails.address}</p>
-                        <p className="text-sm text-gray-600">{order.shippingDetails.city}, {order.shippingDetails.zipCode}</p>
-                        <p className="text-sm text-gray-600 mt-1">Contact: {order.shippingDetails.phone}</p>
-                        <p className="text-sm text-gray-600">Email: {order.shippingDetails.email}</p>
-                      </div>
-                    )}
-
-                    {order.paymentMethod && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Payment Method</p>
-                        <p className="text-sm text-gray-900 font-medium flex items-center gap-2">
-                          {order.paymentMethod === 'card' ? (
-                            <><CreditCard className="w-4 h-4 text-gray-500" /> Credit/Debit Card</>
-                          ) : (
-                            <><Banknote className="w-4 h-4 text-green-600" /> Cash on Delivery</>
-                          )}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Status Updates History */}
-                {order.history && order.history.length > 0 && (
-                  <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Order Updates</h4>
-                    <div className="space-y-4">
-                      {order.history.map((update, index) => (
-                        <div key={index} className="flex gap-4">
-                          <div className="flex flex-col items-center">
-                            <div className={`w-2 h-2 rounded-full mt-1.5 ${index === order.history!.length - 1 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                            {index !== order.history!.length - 1 && <div className="w-0.5 h-full bg-gray-200 mt-1"></div>}
-                          </div>
-                          <div className="pb-4">
-                            <p className="text-sm font-medium text-gray-900 capitalize">{update.status}</p>
-                            <p className="text-sm text-gray-600 mt-1">{update.description}</p>
-                            <p className="text-xs text-gray-400 mt-1">{new Date(update.timestamp).toLocaleString()}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+        {/* Main Content */}
+        <div className="flex-grow">
+          {activeTab === 'orders' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center mb-2">
+                <h1 className="text-2xl font-bold text-gray-900">Order History</h1>
+                <span className="text-sm text-gray-500">{myOrders.length} orders found</span>
               </div>
-            );
-          })}
+
+              {myOrders.length === 0 ? (
+                <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
+                  <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">No orders yet</h2>
+                  <p className="text-gray-500 mb-6">Explore our market and place your first order!</p>
+                  <button onClick={() => navigate('/')} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors">
+                    Start Shopping
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {myOrders.map(order => {
+                    const currentStepIndex = getStepIndex(order.status);
+                    
+                    return (
+                      <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:border-green-100 transition-colors">
+                        <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">Order #{order.id.slice(0, 8).toUpperCase()}</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              Placed on {new Date(order.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">Total</p>
+                              <p className="font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.product?.currency)}</p>
+                            </div>
+                            <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 capitalize ${getStatusColor(order.status)}`}>
+                              {getStatusIcon(order.status)}
+                              {order.status}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Status Tracker */}
+                        <div className="px-6 py-8 border-b border-gray-100">
+                          <div className="relative">
+                            <div className="overflow-hidden h-1.5 mb-4 text-xs flex rounded-full bg-gray-100">
+                              <div 
+                                style={{ width: `${(currentStepIndex / (STATUS_STEPS.length - 1)) * 100}%` }} 
+                                className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500 transition-all duration-500"
+                              ></div>
+                            </div>
+                            <div className="flex justify-between text-[10px] font-bold text-gray-400 px-1 uppercase tracking-widest">
+                              {STATUS_STEPS.map((step, index) => (
+                                <div key={step} className={`flex flex-col items-center w-1/5 ${index <= currentStepIndex ? 'text-green-600' : ''}`}>
+                                  <span className="capitalize mt-1 hidden sm:block">{step}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Order Items */}
+                          <div>
+                            <h4 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Items</h4>
+                            <div className="space-y-4">
+                              {order.items.map((item, index) => (
+                                <div key={index} className="flex justify-between items-center">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-700 font-bold text-sm">
+                                      {item.quantity}x
+                                    </div>
+                                    <div>
+                                      <span className="font-bold text-gray-900 block text-sm">{item.productName}</span>
+                                      {item.selectedVariations && Object.keys(item.selectedVariations).length > 0 && (
+                                        <span className="text-[10px] text-gray-400 uppercase font-bold">
+                                          {Object.entries(item.selectedVariations).map(([k, v]) => `${k}: ${v}`).join(' | ')}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <span className="font-bold text-gray-900 text-sm">{formatPrice(item.price * item.quantity, item.product?.currency)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Shipping & Payment Details */}
+                          <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                            <h4 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Delivery Details</h4>
+                            
+                            {order.shippingDetails && (
+                              <div className="mb-4">
+                                <p className="text-sm text-gray-900 font-bold">{order.shippingDetails.fullName}</p>
+                                <p className="text-sm text-gray-600 mt-1">{order.shippingDetails.address}</p>
+                                <p className="text-sm text-gray-600">{order.shippingDetails.city}, {order.shippingDetails.zipCode}</p>
+                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500 font-medium">
+                                  <MapPin className="w-3 h-3" /> {order.shippingDetails.phone}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="pt-4 border-t border-gray-200 mt-4">
+                              <p className="text-xs text-gray-400 mb-2 uppercase tracking-widest font-bold">Payment</p>
+                              <p className="text-sm text-gray-900 font-bold flex items-center gap-2">
+                                {order.paymentMethod === 'card' ? (
+                                  <><CreditCard className="w-4 h-4 text-gray-400" /> Credit/Debit Card</>
+                                ) : (
+                                  <><Banknote className="w-4 h-4 text-green-600" /> Cash on Delivery</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status Updates History */}
+                        {order.history && order.history.length > 0 && (
+                          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                            <button 
+                              className="text-xs font-bold text-green-600 uppercase tracking-widest flex items-center gap-2 hover:underline"
+                              onClick={(e) => {
+                                const historyEl = e.currentTarget.nextElementSibling;
+                                historyEl?.classList.toggle('hidden');
+                              }}
+                            >
+                              Show Tracking History <ChevronRight className="w-3 h-3" />
+                            </button>
+                            <div className="mt-4 space-y-4 hidden">
+                              {order.history.map((update, index) => (
+                                <div key={index} className="flex gap-4">
+                                  <div className="flex flex-col items-center">
+                                    <div className={`w-2 h-2 rounded-full mt-1.5 ${index === 0 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                    {index !== order.history!.length - 1 && <div className="w-0.5 h-full bg-gray-200 mt-1"></div>}
+                                  </div>
+                                  <div className="pb-4">
+                                    <p className="text-xs font-bold text-gray-900 capitalize">{update.status}</p>
+                                    <p className="text-xs text-gray-500 mt-1">{update.description}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1 font-bold">{new Date(update.timestamp).toLocaleString()}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'wishlist' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center mb-2">
+                <h1 className="text-2xl font-bold text-gray-900">My Wishlist</h1>
+                <span className="text-sm text-gray-500">{wishlistProducts.length} items saved</span>
+              </div>
+
+              {wishlistProducts.length === 0 ? (
+                <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
+                  <Heart className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Your wishlist is empty</h2>
+                  <p className="text-gray-500 mb-6">Save items you love to find them easily later.</p>
+                  <button onClick={() => navigate('/')} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors">
+                    Browse Products
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {wishlistProducts.map(product => (
+                    <div key={product.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:border-green-100 transition-all">
+                      <div className="relative aspect-square overflow-hidden">
+                        <img 
+                          src={product.imageUrl} 
+                          alt={product.name} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button 
+                          onClick={() => toggleWishlist(product.id)}
+                          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm text-red-500 rounded-full shadow-sm hover:bg-white transition-colors"
+                        >
+                          <Heart className="w-4 h-4 fill-current" />
+                        </button>
+                      </div>
+                      <div className="p-4">
+                        <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1">{product.category}</p>
+                        <h3 className="font-bold text-gray-900 line-clamp-1 mb-1">{product.name}</h3>
+                        <div className="flex items-center gap-1 mb-3">
+                          <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                          <span className="text-xs font-bold text-gray-700">4.8</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-gray-900">{formatPrice(product.price, product.currency)}</p>
+                          <button 
+                            onClick={() => navigate(`/product/${product.id}`)}
+                            className="text-xs font-bold text-green-600 hover:underline"
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'profile' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-gray-900">Account Settings</h2>
+                <p className="text-sm text-gray-500 mt-1">Manage your personal information and profile appearance.</p>
+              </div>
+              <div className="p-8">
+                <form onSubmit={handleSaveProfile} className="space-y-6 max-w-xl">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Full Name</label>
+                    <input 
+                      required 
+                      type="text" 
+                      name="name" 
+                      value={profileData.name} 
+                      onChange={handleProfileChange} 
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all font-medium" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Email Address</label>
+                    <input 
+                      required 
+                      type="email" 
+                      name="email" 
+                      value={profileData.email} 
+                      onChange={handleProfileChange} 
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all font-medium" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Profile Image URL</label>
+                    <input 
+                      type="url" 
+                      name="profileImage" 
+                      value={profileData.profileImage} 
+                      onChange={handleProfileChange} 
+                      placeholder="https://example.com/avatar.jpg" 
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all font-medium" 
+                    />
+                  </div>
+                  <div className="pt-4">
+                    <button type="submit" className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-100">
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

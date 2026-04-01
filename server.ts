@@ -25,11 +25,14 @@ db.exec(`
     email TEXT UNIQUE,
     password TEXT,
     role TEXT,
+    status TEXT DEFAULT 'active',
     storeName TEXT,
     storeDescription TEXT,
     profileImage TEXT,
     coverImage TEXT,
-    lastShippingDetails TEXT
+    lastShippingDetails TEXT,
+    wishlist TEXT DEFAULT '[]',
+    createdAt TEXT
   );
 
   CREATE TABLE IF NOT EXISTS products (
@@ -108,6 +111,9 @@ try {
     { table: 'products', name: 'availableCountries', type: 'TEXT' },
     { table: 'products', name: 'availableCities', type: 'TEXT' },
     { table: 'products', name: 'variations', type: 'TEXT' },
+    { table: 'users', name: 'status', type: 'TEXT DEFAULT \'active\'' },
+    { table: 'users', name: 'wishlist', type: 'TEXT DEFAULT \'[]\'' },
+    { table: 'users', name: 'createdAt', type: 'TEXT' },
     { table: 'users', name: 'storeName', type: 'TEXT' },
     { table: 'users', name: 'storeDescription', type: 'TEXT' },
     { table: 'users', name: 'profileImage', type: 'TEXT' },
@@ -160,11 +166,14 @@ async function startServer() {
     try {
       const hashedPassword = bcrypt.hashSync(password, 10);
       const id = uuidv4();
-      const stmt = db.prepare('INSERT INTO users (id, name, email, password, role, storeName) VALUES (?, ?, ?, ?, ?, ?)');
-      stmt.run(id, name, email, hashedPassword, role, storeName || null);
+      const createdAt = new Date().toISOString();
+      const status = role === 'vendor' ? 'pending' : 'active'; // Vendors need approval
+      
+      const stmt = db.prepare('INSERT INTO users (id, name, email, password, role, status, storeName, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      stmt.run(id, name, email, hashedPassword, role, status, storeName || null, createdAt);
       
       const token = jwt.sign({ id, email, role }, JWT_SECRET);
-      res.json({ token, user: { id, name, email, role, storeName } });
+      res.json({ token, user: { id, name, email, role, status, storeName, createdAt } });
     } catch (error: any) {
       if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         res.status(400).json({ error: 'Email already exists' });
@@ -196,6 +205,9 @@ async function startServer() {
       if (userWithoutPassword.lastShippingDetails) {
         userWithoutPassword.lastShippingDetails = JSON.parse(userWithoutPassword.lastShippingDetails);
       }
+      if (userWithoutPassword.wishlist) {
+        userWithoutPassword.wishlist = JSON.parse(userWithoutPassword.wishlist);
+      }
       res.json({ user: userWithoutPassword });
     } else {
       res.status(404).json({ error: 'User not found' });
@@ -204,16 +216,69 @@ async function startServer() {
 
   // Users
   app.get('/api/users/vendors', (req, res) => {
-    const stmt = db.prepare('SELECT id, name, email, role, storeName, storeDescription, profileImage, coverImage FROM users WHERE role = ?');
-    const vendors = stmt.all('vendor');
+    const stmt = db.prepare('SELECT id, name, email, role, status, storeName, storeDescription, profileImage, coverImage, createdAt FROM users WHERE role = ? AND status = ?');
+    const vendors = stmt.all('vendor', 'active');
     res.json(vendors);
   });
 
+  app.put('/api/users/wishlist', authenticateToken, (req: any, res) => {
+    const { productId } = req.body;
+    const user = db.prepare('SELECT wishlist FROM users WHERE id = ?').get(req.user.id) as any;
+    let wishlist = JSON.parse(user.wishlist || '[]');
+    
+    if (wishlist.includes(productId)) {
+      wishlist = wishlist.filter((id: string) => id !== productId);
+    } else {
+      wishlist.push(productId);
+    }
+    
+    db.prepare('UPDATE users SET wishlist = ? WHERE id = ?').run(JSON.stringify(wishlist), req.user.id);
+    res.json({ wishlist });
+  });
+
   app.put('/api/users/profile', authenticateToken, (req: any, res) => {
-    const { storeName, storeDescription, profileImage, coverImage } = req.body;
-    const stmt = db.prepare('UPDATE users SET storeName = ?, storeDescription = ?, profileImage = ?, coverImage = ? WHERE id = ?');
-    stmt.run(storeName, storeDescription, profileImage, coverImage, req.user.id);
+    const { name, email, storeName, storeDescription, profileImage, coverImage } = req.body;
+    const stmt = db.prepare('UPDATE users SET name = ?, email = ?, storeName = ?, storeDescription = ?, profileImage = ?, coverImage = ? WHERE id = ?');
+    stmt.run(name || '', email || '', storeName || null, storeDescription || null, profileImage || null, coverImage || null, req.user.id);
     res.json({ success: true });
+    io.emit('vendors_updated');
+  });
+
+  // Admin Routes
+  app.get('/api/admin/stats', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    
+    const totalSales = db.prepare('SELECT SUM(totalAmount) as total FROM orders WHERE status = ?').get('delivered') as any;
+    const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('customer') as any;
+    const totalVendors = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('vendor') as any;
+    const pendingVendors = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ? AND status = ?').get('vendor', 'pending') as any;
+    
+    res.json({
+      totalRevenue: totalSales.total || 0,
+      totalCustomers: totalUsers.count,
+      totalVendors: totalVendors.count,
+      pendingVendors: pendingVendors.count
+    });
+  });
+
+  app.get('/api/admin/vendors', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const vendors = db.prepare('SELECT id, name, email, status, storeName, createdAt FROM users WHERE role = ?').all('vendor');
+    res.json(vendors);
+  });
+
+  app.put('/api/admin/vendors/:id/status', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const { status } = req.body;
+    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
+    
+    // Notify vendor
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO notifications (id, userId, title, message, type, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(uuidv4(), req.params.id, 'Account Status Updated', `Your vendor account status has been updated to ${status}.`, 'account_update', now);
+    
+    res.json({ success: true });
+    io.emit('notifications_updated');
     io.emit('vendors_updated');
   });
 
@@ -336,7 +401,21 @@ async function startServer() {
     historyStmt.run(uuidv4(), orderId, 'pending', 'Order placed successfully', createdAt);
 
     res.json({ success: true, orderId });
+    
+    // Notify vendor
+    const vendorNotifStmt = db.prepare('INSERT INTO notifications (id, userId, title, message, type, orderId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    vendorNotifStmt.run(
+      uuidv4(),
+      vendorId,
+      'New Order Received',
+      `You have received a new order #${orderId.slice(0, 8).toUpperCase()} from ${customer.name}.`,
+      'new_order',
+      orderId,
+      createdAt
+    );
+
     io.emit('orders_updated');
+    io.emit('notifications_updated');
   });
 
   app.put('/api/orders/:id/status', authenticateToken, (req: any, res) => {

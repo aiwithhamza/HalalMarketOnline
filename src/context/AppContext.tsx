@@ -47,6 +47,13 @@ interface AppContextType {
   updateOrderStatus: (orderId: string, status: OrderStatus, description?: string) => Promise<void>;
   vendors: User[];
   updateVendorProfile: (vendor: User) => Promise<void>;
+  updateUserProfile: (user: Partial<User>) => Promise<void>;
+  toggleWishlist: (productId: string) => Promise<void>;
+  adminStats: any;
+  adminVendors: User[];
+  fetchAdminStats: () => Promise<void>;
+  fetchAdminVendors: () => Promise<void>;
+  updateVendorStatus: (vendorId: string, status: string) => Promise<void>;
   customers: User[];
   isAuthReady: boolean;
   notifications: Notification[];
@@ -94,6 +101,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [vendors, setVendors] = useState<User[]>([]);
   const [customers, setCustomers] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [adminStats, setAdminStats] = useState<any>(null);
+  const [adminVendors, setAdminVendors] = useState<User[]>([]);
 
   const handleResponse = async (res: Response) => {
     const contentType = res.headers.get('content-type');
@@ -146,6 +155,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const fetchAdminStats = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/stats', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminStats(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchAdminVendors = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/vendors', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminVendors(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       if (token) {
@@ -175,6 +208,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (token) {
       fetchOrders();
       fetchNotifications();
+      if (currentUser?.role === 'admin') {
+        fetchAdminStats();
+        fetchAdminVendors();
+      }
     }
 
     const socket = io();
@@ -360,6 +397,65 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setCurrentUser(vendor);
   };
 
+  const updateUserProfile = async (userData: Partial<User>) => {
+    if (!token || !currentUser) return;
+    try {
+      const res = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...currentUser, ...userData })
+      });
+      if (res.ok) {
+        setCurrentUser({ ...currentUser, ...userData } as User);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleWishlist = async (productId: string) => {
+    if (!token || !currentUser) return;
+    try {
+      const res = await fetch('/api/users/wishlist', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ productId })
+      });
+      if (res.ok) {
+        const data = await handleResponse(res);
+        setCurrentUser({ ...currentUser, wishlist: data.wishlist });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateVendorStatus = async (vendorId: string, status: string) => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch(`/api/admin/vendors/${vendorId}/status`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        fetchAdminVendors();
+        fetchAdminStats();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const markNotificationAsRead = async (id: string) => {
     if (!token) return;
     try {
@@ -395,6 +491,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       updateOrderStatus,
       vendors,
       updateVendorProfile,
+      updateUserProfile,
+      toggleWishlist,
+      adminStats,
+      adminVendors,
+      fetchAdminStats,
+      fetchAdminVendors,
+      updateVendorStatus,
       customers,
       isAuthReady,
       notifications,

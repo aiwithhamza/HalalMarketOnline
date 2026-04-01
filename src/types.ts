@@ -1,4 +1,4 @@
-export type Role = 'customer' | 'vendor';
+export type Role = 'customer' | 'vendor' | 'admin';
 
 export interface Currency {
   code: string;
@@ -42,16 +42,21 @@ export interface Notification {
   createdAt: string;
 }
 
+export type UserStatus = 'pending' | 'active' | 'suspended';
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: Role;
+  status: UserStatus;
   storeName?: string;
   storeDescription?: string;
   profileImage?: string;
   coverImage?: string;
   lastShippingDetails?: ShippingDetails;
+  wishlist?: string[]; // Array of product IDs
+  createdAt: string;
 }
 
 export interface ProductVariation {
