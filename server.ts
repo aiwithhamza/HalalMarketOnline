@@ -189,7 +189,16 @@ async function startServer() {
   });
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Error handling for malformed JSON
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err instanceof SyntaxError && 'status' in err && err.status === 400 && 'body' in err) {
+      return res.status(400).json({ error: 'Invalid JSON payload' });
+    }
+    next();
+  });
 
   // Health check for hosting platforms
   app.get('/api/health', (req, res) => {
@@ -213,6 +222,7 @@ async function startServer() {
 
   // Auth
   app.post('/api/auth/register', (req, res) => {
+    console.log('POST /api/auth/register', req.body?.email);
     const { name, email, password, role, storeName, adminSecret } = req.body;
     try {
       // Check admin secret if role is admin
@@ -242,6 +252,7 @@ async function startServer() {
   });
 
   app.post('/api/auth/login', (req, res) => {
+    console.log('POST /api/auth/login', req.body?.email);
     const { email, password } = req.body;
     const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
     const user = stmt.get(email) as any;
@@ -773,6 +784,12 @@ async function startServer() {
     io.to(req.user.id).emit('new_message', message);
     
     res.json(message);
+  });
+
+  // Catch-all for API routes to ensure JSON response
+  app.all('/api/*', (req, res) => {
+    console.log(`404 Not Found: ${req.method} ${req.url}`);
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
   });
 
   // Socket.io connection
