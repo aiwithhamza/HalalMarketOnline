@@ -61,9 +61,19 @@ export interface User {
   createdAt: string;
 }
 
-export interface ProductVariation {
-  name: string;
-  options: string[];
+export interface VariationType {
+  name: string; // e.g., "Color", "Size"
+  options: string[]; // e.g., ["Red", "Blue"]
+}
+
+export interface VariationCombination {
+  id: string;
+  combination: Record<string, string>; // e.g., {"Color": "Red", "Size": "XL"}
+  price: number;
+  stock: number;
+  images: string[];
+  weight?: string;
+  attributes?: Record<string, string>;
 }
 
 export interface Product {
@@ -81,7 +91,8 @@ export interface Product {
   isHalalCertified: boolean;
   availableCountries?: string[]; // For Fresh Items
   availableCities?: string[]; // For Fresh Items
-  variations?: ProductVariation[];
+  variationTypes?: VariationType[];
+  variationCombinations?: VariationCombination[];
   rating?: number;
   reviewCount?: number;
 }

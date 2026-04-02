@@ -4,9 +4,10 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Plus, Edit2, Trash2, Package, DollarSign, ShoppingBag, 
   Clock, CheckCircle, Truck, MapPin, X, TrendingUp, 
-  AlertTriangle, BarChart2, LayoutDashboard, MessageSquare
+  AlertTriangle, BarChart2, LayoutDashboard, MessageSquare,
+  ChevronDown, ChevronUp, Image as ImageIcon, Settings
 } from 'lucide-react';
-import { Product, OrderStatus, ProductVariation, SUPPORTED_CURRENCIES } from '../types';
+import { Product, OrderStatus, VariationType, VariationCombination, SUPPORTED_CURRENCIES } from '../types';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
@@ -33,6 +34,7 @@ export default function VendorDashboard() {
   }, [location.state]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [statusModal, setStatusModal] = useState<{ orderId: string, status: OrderStatus, description: string } | null>(null);
 
   const [formData, setFormData] = useState({
@@ -48,7 +50,10 @@ export default function VendorDashboard() {
     availableCities: '',
   });
   
-  const [variations, setVariations] = useState<ProductVariation[]>([]);
+  const [variationTypes, setVariationTypes] = useState<VariationType[]>([]);
+  const [variationCombinations, setVariationCombinations] = useState<VariationCombination[]>([]);
+  const [showCombinations, setShowCombinations] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [profileData, setProfileData] = useState({
     storeName: currentUser?.storeName || '',
@@ -76,7 +81,8 @@ export default function VendorDashboard() {
         profileImage: profileData.profileImage,
         coverImage: profileData.coverImage
       });
-      alert('Profile updated successfully!');
+      setSuccessMessage('Profile updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 5000);
     }
   };
 
@@ -273,26 +279,79 @@ export default function VendorDashboard() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleAddVariation = () => {
-    setVariations([...variations, { name: '', options: [] }]);
+  const handleAddVariationType = () => {
+    setVariationTypes([...variationTypes, { name: '', options: [] }]);
   };
 
-  const handleVariationNameChange = (index: number, name: string) => {
-    const newVariations = [...variations];
-    newVariations[index].name = name;
-    setVariations(newVariations);
+  const handleVariationTypeNameChange = (index: number, name: string) => {
+    const newTypes = [...variationTypes];
+    newTypes[index].name = name;
+    setVariationTypes(newTypes);
   };
 
-  const handleVariationOptionsChange = (index: number, optionsString: string) => {
-    const newVariations = [...variations];
-    newVariations[index].options = optionsString.split(',').map(opt => opt.trim()).filter(opt => opt !== '');
-    setVariations(newVariations);
+  const handleVariationTypeOptionsChange = (index: number, optionsString: string) => {
+    const newTypes = [...variationTypes];
+    newTypes[index].options = optionsString.split(',').map(opt => opt.trim()).filter(opt => opt !== '');
+    setVariationTypes(newTypes);
   };
 
-  const handleRemoveVariation = (index: number) => {
-    const newVariations = [...variations];
-    newVariations.splice(index, 1);
-    setVariations(newVariations);
+  const handleRemoveVariationType = (index: number) => {
+    const newTypes = [...variationTypes];
+    newTypes.splice(index, 1);
+    setVariationTypes(newTypes);
+  };
+
+  const generateCombinations = () => {
+    if (variationTypes.length === 0) {
+      setVariationCombinations([]);
+      return;
+    }
+    
+    // Check if all types have names and options
+    if (variationTypes.some(t => !t.name || t.options.length === 0)) {
+      alert('Please ensure all variation types have a name and at least one option.');
+      return;
+    }
+
+    let results: Record<string, string>[] = [{}];
+    
+    variationTypes.forEach(type => {
+      const newResults: Record<string, string>[] = [];
+      results.forEach(res => {
+        type.options.forEach(opt => {
+          newResults.push({ ...res, [type.name]: opt });
+        });
+      });
+      results = newResults;
+    });
+    
+    const newCombinations = results.map(comb => {
+      // Try to find existing combination to preserve data
+      const existing = variationCombinations.find(vc => 
+        Object.entries(comb).every(([key, value]) => vc.combination[key] === value)
+      );
+      
+      if (existing) return existing;
+
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        combination: comb,
+        price: parseFloat(formData.price) || 0,
+        stock: parseInt(formData.stock) || 0,
+        images: [formData.imageUrl].filter(Boolean),
+        weight: '',
+        attributes: {}
+      };
+    });
+    
+    setVariationCombinations(newCombinations);
+    setShowCombinations(true);
+  };
+
+  const handleCombinationChange = (index: number, field: keyof VariationCombination, value: any) => {
+    const newCombinations = [...variationCombinations];
+    newCombinations[index] = { ...newCombinations[index], [field]: value };
+    setVariationCombinations(newCombinations);
   };
 
   const handleSubmitProduct = async (e: React.FormEvent) => {
@@ -309,18 +368,20 @@ export default function VendorDashboard() {
       tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
       availableCountries: formData.availableCountries.split(',').map(country => country.trim()).filter(country => country !== ''),
       availableCities: formData.availableCities.split(',').map(city => city.trim()).filter(city => city !== ''),
-      variations: variations.filter(v => v.name && v.options.length > 0),
-      isHalalCertified: true // All products are Halal certified by default
+      variationTypes: variationTypes.filter(v => v.name && v.options.length > 0),
+      variationCombinations: variationCombinations,
+      isHalalCertified: true
     };
 
     try {
       if (editingProduct) {
         await updateProduct({ ...editingProduct, ...productData });
-        alert('Product updated successfully!');
+        setSuccessMessage('Product updated successfully!');
       } else {
         await addProduct(productData);
-        alert('Product created successfully!');
+        setSuccessMessage('Product created successfully!');
       }
+      setTimeout(() => setSuccessMessage(null), 5000);
       resetForm();
     } catch (error: any) {
       alert(`Error: ${error.message}`);
@@ -331,7 +392,9 @@ export default function VendorDashboard() {
     setIsAddingProduct(false);
     setEditingProduct(null);
     setFormData({ name: '', description: '', price: '', currency: 'USD', category: 'Fresh Items', imageUrl: '', stock: '', tags: '', availableCountries: '', availableCities: '' });
-    setVariations([]);
+    setVariationTypes([]);
+    setVariationCombinations([]);
+    setShowCombinations(false);
   };
 
   const handleEditClick = (product: Product) => {
@@ -348,7 +411,9 @@ export default function VendorDashboard() {
       availableCountries: product.availableCountries?.join(', ') || '',
       availableCities: product.availableCities?.join(', ') || ''
     });
-    setVariations(product.variations || []);
+    setVariationTypes(product.variationTypes || []);
+    setVariationCombinations(product.variationCombinations || []);
+    setShowCombinations((product.variationCombinations?.length || 0) > 0);
     setIsAddingProduct(true);
   };
 
@@ -365,6 +430,22 @@ export default function VendorDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Success Message Banner */}
+      {successMessage && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+            <CheckCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="font-bold text-green-900">{successMessage}</p>
+            <p className="text-sm text-green-700">Your changes have been saved and are now live.</p>
+          </div>
+          <button onClick={() => setSuccessMessage(null)} className="ml-auto text-green-400 hover:text-green-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Vendor Dashboard</h1>
@@ -412,6 +493,38 @@ export default function VendorDashboard() {
 
       {/* Dashboard Tab */}
       {activeTab === 'dashboard' && renderDashboard()}
+
+      {/* Delete Confirmation Modal */}
+      {deletingProductId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Product?</h3>
+            <p className="text-gray-500 mb-6">Are you sure you want to delete this product? This action cannot be undone.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeletingProductId(null)}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl font-bold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  deleteProduct(deletingProductId);
+                  setDeletingProductId(null);
+                  setSuccessMessage('Product deleted successfully!');
+                  setTimeout(() => setSuccessMessage(null), 5000);
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-100"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Overview - Only show on other tabs if needed, but we have a dedicated dashboard now */}
       {activeTab !== 'dashboard' && (
@@ -542,42 +655,145 @@ export default function VendorDashboard() {
                 </div>
 
                 {/* Variations Section */}
-                <div className="space-y-4 md:col-span-2 mt-4 p-4 border border-gray-200 rounded-lg bg-white">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-md font-semibold text-gray-900">Product Variations</h4>
-                    <button type="button" onClick={handleAddVariation} className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
-                      <Plus className="w-4 h-4" /> Add Variation
-                    </button>
-                  </div>
-                  {variations.length === 0 ? (
-                    <p className="text-sm text-gray-500">No variations added. Add variations like Size, Color, or Weight.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {variations.map((variation, index) => (
-                        <div key={index} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                          <div className="w-full sm:w-1/3">
-                            <input 
-                              type="text" 
-                              placeholder="Variation Name (e.g., Size)" 
-                              value={variation.name} 
-                              onChange={(e) => handleVariationNameChange(index, e.target.value)} 
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                            />
-                          </div>
-                          <div className="w-full sm:w-flex-grow flex items-center gap-2">
-                            <input 
-                              type="text" 
-                              placeholder="Options (comma-separated, e.g., Small, Medium, Large)" 
-                              value={variation.options.join(', ')} 
-                              onChange={(e) => handleVariationOptionsChange(index, e.target.value)} 
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                            />
-                            <button type="button" onClick={() => handleRemoveVariation(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-md">
-                              <X className="w-4 h-4" />
+                <div className="space-y-6 md:col-span-2 mt-6">
+                  <div className="p-6 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900">1. Define Variation Types</h4>
+                        <p className="text-sm text-gray-500">Add types like Size, Color, or Material.</p>
+                      </div>
+                      <button type="button" onClick={handleAddVariationType} className="bg-green-50 text-green-700 px-4 py-2 rounded-xl font-bold hover:bg-green-100 transition-all flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Add Type
+                      </button>
+                    </div>
+                    
+                    {variationTypes.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                        <Settings className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No variation types added yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {variationTypes.map((type, index) => (
+                          <div key={index} className="flex flex-col sm:flex-row gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 relative group">
+                            <div className="w-full sm:w-1/3">
+                              <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Type Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Size" 
+                                value={type.name} 
+                                onChange={(e) => handleVariationTypeNameChange(index, e.target.value)} 
+                                className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+                            <div className="flex-grow">
+                              <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Options (comma separated)</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Small, Medium, Large" 
+                                value={type.options.join(', ')} 
+                                onChange={(e) => handleVariationTypeOptionsChange(index, e.target.value)} 
+                                className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+                            <button type="button" onClick={() => handleRemoveVariationType(index)} className="absolute -top-2 -right-2 sm:static p-2 text-red-400 hover:text-red-600 bg-white sm:bg-transparent rounded-full shadow-sm sm:shadow-none opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Trash2 className="w-5 h-5" />
                             </button>
                           </div>
+                        ))}
+                        
+                        <div className="pt-4 flex justify-center">
+                          <button 
+                            type="button" 
+                            onClick={generateCombinations}
+                            className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition-all shadow-lg"
+                          >
+                            Generate All Combinations
+                          </button>
                         </div>
-                      ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {showCombinations && variationCombinations.length > 0 && (
+                    <div className="p-6 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                      <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <h4 className="text-lg font-bold text-gray-900">2. Manage Combinations</h4>
+                          <p className="text-sm text-gray-500">Set specific price, stock, and details for each variation.</p>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => setShowCombinations(!showCombinations)}
+                          className="text-gray-500 hover:text-gray-900"
+                        >
+                          {showCombinations ? <ChevronUp /> : <ChevronDown />}
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {variationCombinations.map((vc, index) => (
+                          <div key={index} className="border border-gray-100 rounded-2xl overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-3 flex flex-wrap gap-2 items-center border-b border-gray-100">
+                              {Object.entries(vc.combination).map(([key, value]) => (
+                                <span key={`combo-${key}`} className="bg-white px-3 py-1 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 shadow-sm">
+                                  {key}: {value}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                              <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Price</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2 text-gray-400 text-sm">$</span>
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={vc.price}
+                                    onChange={(e) => {
+                                      const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                      handleCombinationChange(index, 'price', isNaN(val) ? 0 : val);
+                                    }}
+                                    className="w-full pl-7 pr-4 py-2 border border-gray-200 rounded-lg text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Stock</label>
+                                <input 
+                                  type="number" 
+                                  value={vc.stock}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                    handleCombinationChange(index, 'stock', isNaN(val) ? 0 : val);
+                                  }}
+                                  className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Weight</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. 500g"
+                                  value={vc.weight}
+                                  onChange={(e) => handleCombinationChange(index, 'weight', e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Images (comma separated)</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="URLs..."
+                                  value={vc.images?.join(', ') || ''}
+                                  onChange={(e) => handleCombinationChange(index, 'images', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                                  className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -636,7 +852,10 @@ export default function VendorDashboard() {
                           <button onClick={() => handleEditClick(product)} className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors">
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button onClick={() => deleteProduct(product.id)} className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors">
+                          <button 
+                            onClick={() => setDeletingProductId(product.id)} 
+                            className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>

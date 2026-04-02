@@ -130,7 +130,11 @@ export default function VendorShop() {
                 </div>
                 <p className="text-gray-500 text-sm mb-4 line-clamp-2 flex-grow">{product.description}</p>
                 <div className="flex items-center justify-between mt-auto">
-                  <span className="text-xl font-bold text-gray-900">{formatPrice(product.price, product.currency)}</span>
+                  <span className="text-xl font-bold text-gray-900">
+                    {product.variationCombinations && product.variationCombinations.length > 0
+                      ? `From ${formatPrice(Math.min(...product.variationCombinations.map((vc: any) => vc.price)), product.currency)}`
+                      : formatPrice(product.price, product.currency)}
+                  </span>
                   <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">View Details</span>
                 </div>
               </div>

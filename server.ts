@@ -50,7 +50,8 @@ db.exec(`
     isHalalCertified INTEGER,
     availableCountries TEXT,
     availableCities TEXT,
-    variations TEXT
+    variationTypes TEXT,
+    variationCombinations TEXT
   );
 
   -- Migration: Add currency column if it doesn't exist
@@ -133,7 +134,8 @@ try {
     { table: 'products', name: 'isHalalCertified', type: 'INTEGER DEFAULT 1' },
     { table: 'products', name: 'availableCountries', type: 'TEXT' },
     { table: 'products', name: 'availableCities', type: 'TEXT' },
-    { table: 'products', name: 'variations', type: 'TEXT' },
+    { table: 'products', name: 'variationTypes', type: 'TEXT' },
+    { table: 'products', name: 'variationCombinations', type: 'TEXT' },
     { table: 'users', name: 'status', type: 'TEXT DEFAULT \'active\'' },
     { table: 'users', name: 'wishlist', type: 'TEXT DEFAULT \'[]\'' },
     { table: 'users', name: 'createdAt', type: 'TEXT' },
@@ -337,7 +339,8 @@ async function startServer() {
       tags: JSON.parse(p.tags || '[]'),
       availableCountries: JSON.parse(p.availableCountries || '[]'),
       availableCities: JSON.parse(p.availableCities || '[]'),
-      variations: JSON.parse(p.variations || '[]'),
+      variationTypes: JSON.parse(p.variationTypes || '[]'),
+      variationCombinations: JSON.parse(p.variationCombinations || '[]'),
       rating: p.rating || 0,
       reviewCount: p.reviewCount || 0
     }));
@@ -348,13 +351,13 @@ async function startServer() {
     const p = req.body;
     const id = uuidv4();
     const stmt = db.prepare(`
-      INSERT INTO products (id, vendorId, vendorName, name, description, price, currency, category, imageUrl, stock, tags, isHalalCertified, availableCountries, availableCities, variations)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (id, vendorId, vendorName, name, description, price, currency, category, imageUrl, stock, tags, isHalalCertified, availableCountries, availableCities, variationTypes, variationCombinations)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       id, req.user.id, p.vendorName, p.name, p.description, p.price, p.currency || 'USD', p.category, p.imageUrl, p.stock,
       JSON.stringify(p.tags || []), p.isHalalCertified ? 1 : 0, JSON.stringify(p.availableCountries || []),
-      JSON.stringify(p.availableCities || []), JSON.stringify(p.variations || [])
+      JSON.stringify(p.availableCities || []), JSON.stringify(p.variationTypes || []), JSON.stringify(p.variationCombinations || [])
     );
     res.json({ id });
     io.emit('products_updated');
@@ -363,13 +366,13 @@ async function startServer() {
   app.put('/api/products/:id', authenticateToken, (req: any, res) => {
     const p = req.body;
     const stmt = db.prepare(`
-      UPDATE products SET name = ?, description = ?, price = ?, currency = ?, category = ?, imageUrl = ?, stock = ?, tags = ?, isHalalCertified = ?, availableCountries = ?, availableCities = ?, variations = ?
+      UPDATE products SET name = ?, description = ?, price = ?, currency = ?, category = ?, imageUrl = ?, stock = ?, tags = ?, isHalalCertified = ?, availableCountries = ?, availableCities = ?, variationTypes = ?, variationCombinations = ?
       WHERE id = ? AND vendorId = ?
     `);
     stmt.run(
       p.name, p.description, p.price, p.currency || 'USD', p.category, p.imageUrl, p.stock,
       JSON.stringify(p.tags || []), p.isHalalCertified ? 1 : 0, JSON.stringify(p.availableCountries || []),
-      JSON.stringify(p.availableCities || []), JSON.stringify(p.variations || []),
+      JSON.stringify(p.availableCities || []), JSON.stringify(p.variationTypes || []), JSON.stringify(p.variationCombinations || []),
       req.params.id, req.user.id
     );
     res.json({ success: true });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { Product, VariationCombination } from '../types';
 import { ArrowLeft, Store, ShoppingCart, Check, AlertCircle, CheckCircle, MapPin, Tag, MessageSquare, Star } from 'lucide-react';
 import ReviewSection from '../components/ReviewSection';
 
@@ -10,23 +11,35 @@ export default function ProductDetails() {
   const { products, addToCart, formatPrice, currentUser } = useAppContext();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
-  const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [currentCombination, setCurrentCombination] = useState<VariationCombination | null>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   const product = products.find(p => p.id === id);
 
   // Initialize default variations if not set
   useEffect(() => {
-    if (product?.variations && product.variations.length > 0) {
-      setSelectedVariations(prev => {
-        if (Object.keys(prev).length > 0) return prev;
-        const initialVars: Record<string, string> = {};
-        product.variations!.forEach(v => {
-          if (v.options.length > 0) initialVars[v.name] = v.options[0];
-        });
-        return Object.keys(initialVars).length > 0 ? initialVars : prev;
+    if (product?.variationTypes && product.variationTypes.length > 0) {
+      const initialOptions: Record<string, string> = {};
+      product.variationTypes.forEach(vt => {
+        if (vt.options.length > 0) initialOptions[vt.name] = vt.options[0];
       });
+      setSelectedOptions(initialOptions);
     }
   }, [product?.id]);
+
+  // Find matching combination
+  useEffect(() => {
+    if (product?.variationCombinations && Object.keys(selectedOptions).length > 0) {
+      const match = product.variationCombinations.find(vc => 
+        Object.entries(selectedOptions).every(([key, value]) => vc.combination[key] === value)
+      );
+      setCurrentCombination(match || null);
+      setActiveImageIndex(0); // Reset image index when variation changes
+    } else {
+      setCurrentCombination(null);
+    }
+  }, [selectedOptions, product]);
 
   if (!product) {
     return (
@@ -40,42 +53,75 @@ export default function ProductDetails() {
   }
 
   const handleAddToCart = () => {
-    addToCart(product, quantity, selectedVariations);
+    const finalProduct = {
+      ...product,
+      price: currentCombination?.price ?? product.price,
+      stock: currentCombination?.stock ?? product.stock,
+      imageUrl: (currentCombination?.images && currentCombination.images.length > 0) 
+        ? currentCombination.images[0] 
+        : product.imageUrl,
+    };
+    addToCart(finalProduct, quantity, selectedOptions);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
 
+  const displayPrice = currentCombination?.price ?? product.price;
+  const displayStock = currentCombination?.stock ?? product.stock;
+  const displayImages = currentCombination?.images && currentCombination.images.length > 0 
+    ? currentCombination.images 
+    : [product.imageUrl];
+  const activeImage = displayImages[activeImageIndex] || product.imageUrl;
+
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-900 mb-6 flex items-center gap-2 transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back
       </button>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col md:flex-row">
-        {/* Product Image */}
-        <div className="md:w-1/2 h-64 md:h-auto relative bg-gray-50">
-          <img 
-            src={product.imageUrl} 
-            alt={product.name} 
-            className="w-full h-full object-cover absolute inset-0"
-            referrerPolicy="no-referrer"
-          />
-          {product.isHalalCertified && (
-            <div className="absolute top-4 left-4 bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md flex items-center gap-1.5">
-              <CheckCircle className="w-4 h-4" /> 100% Halal Certified
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row">
+        {/* Product Image Gallery */}
+        <div className="lg:w-1/2 p-4 sm:p-8 bg-gray-50 flex flex-col gap-4">
+          <div className="aspect-square relative rounded-xl overflow-hidden bg-white border border-gray-100">
+            <img 
+              src={activeImage} 
+              alt={product.name} 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
+            {product.isHalalCertified && (
+              <div className="absolute top-4 left-4 bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4" /> 100% Halal
+              </div>
+            )}
+          </div>
+          
+          {displayImages.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {displayImages.map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveImageIndex(idx)}
+                  className={`w-20 h-20 flex-shrink-0 rounded-lg border-2 overflow-hidden transition-all ${
+                    activeImageIndex === idx ? 'border-green-600 shadow-sm' : 'border-transparent opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                </button>
+              ))}
             </div>
           )}
         </div>
 
         {/* Product Info */}
-        <div className="md:w-1/2 p-8 flex flex-col">
+        <div className="lg:w-1/2 p-8 flex flex-col">
           <div className="mb-4 flex items-center justify-between">
             <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wider">
               {product.category}
             </span>
-            <span className="text-sm text-gray-500 flex items-center gap-1">
+            <Link to={`/vendor/${product.vendorId}`} className="text-sm text-gray-500 hover:text-green-600 flex items-center gap-1 transition-colors">
               <Store className="w-4 h-4" /> {product.vendorName}
-            </span>
+            </Link>
           </div>
           
           <h1 className="text-3xl font-bold text-gray-900 mb-4">{product.name}</h1>
@@ -141,20 +187,27 @@ export default function ProductDetails() {
           ) : null}
 
           {/* Variations */}
-          {product.variations && product.variations.length > 0 && (
-            <div className="space-y-4 mb-6">
-              {product.variations.map(variation => (
-                <div key={variation.name}>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">{variation.name}</h4>
+          {product.variationTypes && product.variationTypes.length > 0 && (
+            <div className="space-y-6 mb-8">
+              {product.variationTypes.map(vt => (
+                <div key={`vt-${vt.name}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide">{vt.name}</h4>
+                    {selectedOptions[vt.name] && (
+                      <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded">
+                        Selected: {selectedOptions[vt.name]}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {variation.options.map(option => (
+                    {vt.options.map(option => (
                       <button
                         key={option}
-                        onClick={() => setSelectedVariations(prev => ({ ...prev, [variation.name]: option }))}
-                        className={`px-4 py-2 text-sm border rounded-lg transition-colors ${
-                          selectedVariations[variation.name] === option
-                            ? 'border-green-600 bg-green-50 text-green-700 font-medium'
-                            : 'border-gray-200 text-gray-700 hover:border-green-300'
+                        onClick={() => setSelectedOptions(prev => ({ ...prev, [vt.name]: option }))}
+                        className={`px-4 py-2 text-sm border-2 rounded-xl transition-all ${
+                          selectedOptions[vt.name] === option
+                            ? 'border-green-600 bg-green-50 text-green-700 font-bold shadow-sm'
+                            : 'border-gray-100 text-gray-600 hover:border-green-200 hover:bg-gray-50'
                         }`}
                       >
                         {option}
@@ -165,18 +218,36 @@ export default function ProductDetails() {
               ))}
             </div>
           )}
+
+          {/* Variation Attributes */}
+          {currentCombination && (
+            <div className="grid grid-cols-2 gap-4 mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100">
+              {currentCombination.weight && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-bold">Weight</p>
+                  <p className="text-sm font-medium text-gray-900">{currentCombination.weight}</p>
+                </div>
+              )}
+              {currentCombination.attributes && Object.entries(currentCombination.attributes).map(([key, value]) => (
+                <div key={`attr-${key}`}>
+                  <p className="text-xs text-gray-500 uppercase font-bold">{key}</p>
+                  <p className="text-sm font-medium text-gray-900">{value}</p>
+                </div>
+              ))}
+            </div>
+          )}
           
           <div className="border-t border-gray-100 pt-6 mt-auto">
             <div className="flex items-end justify-between mb-6">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Price</p>
-                <p className="text-4xl font-extrabold text-gray-900">{formatPrice(product.price, product.currency)}</p>
+                <p className="text-4xl font-extrabold text-gray-900">{formatPrice(displayPrice, product.currency)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500 mb-1">Availability</p>
-                {product.stock > 0 ? (
+                {displayStock > 0 ? (
                   <p className="text-green-600 font-medium flex items-center gap-1 justify-end">
-                    <Check className="w-4 h-4" /> In Stock ({product.stock})
+                    <Check className="w-4 h-4" /> In Stock ({displayStock})
                   </p>
                 ) : (
                   <p className="text-red-500 font-medium flex items-center gap-1 justify-end">
@@ -187,21 +258,21 @@ export default function ProductDetails() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden w-full sm:w-auto">
+              <div className="flex items-center border-2 border-gray-100 rounded-xl overflow-hidden w-full sm:w-auto">
                 <button 
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="px-4 py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
-                  disabled={product.stock === 0}
+                  className="px-4 py-3 bg-white hover:bg-gray-50 text-gray-600 transition-colors border-r border-gray-100"
+                  disabled={displayStock === 0}
                 >
                   -
                 </button>
-                <div className="w-12 text-center font-medium text-gray-900">
+                <div className="w-12 text-center font-bold text-gray-900">
                   {quantity}
                 </div>
                 <button 
-                  onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                  className="px-4 py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
-                  disabled={product.stock === 0 || quantity >= product.stock}
+                  onClick={() => setQuantity(Math.min(displayStock, quantity + 1))}
+                  className="px-4 py-3 bg-white hover:bg-gray-50 text-gray-600 transition-colors border-l border-gray-100"
+                  disabled={displayStock === 0 || quantity >= displayStock}
                 >
                   +
                 </button>
@@ -209,13 +280,13 @@ export default function ProductDetails() {
               
               <button 
                 onClick={handleAddToCart}
-                disabled={product.stock === 0}
-                className={`flex-1 w-full flex items-center justify-center gap-2 py-3 px-6 rounded-lg font-semibold transition-all ${
-                  product.stock === 0 
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                disabled={displayStock === 0}
+                className={`flex-1 w-full flex items-center justify-center gap-2 py-4 px-6 rounded-xl font-bold transition-all ${
+                  displayStock === 0 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : added 
                       ? 'bg-green-500 text-white' 
-                      : 'bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 hover:shadow-emerald-300'
                 }`}
               >
                 {added ? (

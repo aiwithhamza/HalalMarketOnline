@@ -313,6 +313,15 @@ export default function Home() {
 // Extracted ProductCard component for reuse
 function ProductCard({ product, addToCart }: { product: any, addToCart: any, key?: React.Key }) {
   const { formatPrice } = useAppContext();
+  
+  const prices = product.variationCombinations && product.variationCombinations.length > 0
+    ? product.variationCombinations.map((vc: any) => vc.price)
+    : [product.price];
+  
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const hasPriceRange = minPrice !== maxPrice;
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col">
       <Link to={`/product/${product.id}`} className="block relative h-56 overflow-hidden bg-gray-50">
@@ -356,21 +365,18 @@ function ProductCard({ product, addToCart }: { product: any, addToCart: any, key
 
         <div className="flex items-center justify-between mt-auto pt-4">
           <div className="flex flex-col">
-            <span className="text-xs text-gray-500 line-through">{formatPrice(product.price * 1.2, product.currency)}</span>
-            <span className="text-xl font-extrabold text-gray-900">{formatPrice(product.price, product.currency)}</span>
+            <span className="text-xs text-gray-500 line-through">{formatPrice(minPrice * 1.2, product.currency)}</span>
+            <span className="text-xl font-extrabold text-gray-900">
+              {hasPriceRange ? `From ${formatPrice(minPrice, product.currency)}` : formatPrice(product.price, product.currency)}
+            </span>
           </div>
-          <button 
-            onClick={() => addToCart(product, 1)}
-            disabled={product.stock === 0}
-            className={`p-3 rounded-xl transition-all ${
-              product.stock > 0 
-                ? 'bg-green-600 text-white hover:bg-green-700 hover:shadow-md hover:-translate-y-0.5' 
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-            title={product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
+          <Link 
+            to={`/product/${product.id}`}
+            className="p-3 rounded-xl transition-all bg-green-600 text-white hover:bg-green-700 hover:shadow-md hover:-translate-y-0.5"
+            title="View Details"
           >
             <ShoppingBag className="w-5 h-5" />
-          </button>
+          </Link>
         </div>
       </div>
     </div>
