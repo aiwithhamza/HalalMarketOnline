@@ -4,7 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Package, Clock, CheckCircle, Truck, MapPin, 
   CreditCard, Banknote, User as UserIcon, Heart, 
-  Settings, ShoppingBag, ChevronRight, Star, MessageSquare
+  Settings, ShoppingBag, ChevronRight, Star, MessageSquare, X
 } from 'lucide-react';
 import { OrderStatus } from '../types';
 import ChatList from '../components/chat/ChatList';
@@ -16,6 +16,7 @@ export default function CustomerDashboard() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'profile' | 'messages'>('orders');
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const state = location.state as { openChatWith?: string, activeTab?: string };
@@ -48,7 +49,8 @@ export default function CustomerDashboard() {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     await updateUserProfile(profileData);
-    alert('Profile updated successfully!');
+    setSuccessMessage('Profile updated successfully!');
+    setTimeout(() => setSuccessMessage(null), 5000);
   };
 
   const myOrders = orders.filter(o => o.customerId === currentUser.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -84,6 +86,22 @@ export default function CustomerDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Success Message Banner */}
+      {successMessage && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+            <CheckCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="font-bold text-green-900">{successMessage}</p>
+            <p className="text-sm text-green-700">Your profile has been updated successfully.</p>
+          </div>
+          <button onClick={() => setSuccessMessage(null)} className="ml-auto text-green-400 hover:text-green-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar */}
         <div className="w-full md:w-64 space-y-2">

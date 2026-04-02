@@ -20,6 +20,17 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     if (currentUser?.role === 'admin') {
@@ -40,18 +51,30 @@ export default function AdminDashboard() {
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
-  const handleDeleteUser = async (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete user "${name}"? This action cannot be undone.`)) {
-      await deleteUserAdmin(id);
-      showSuccess(`User ${name} deleted successfully.`);
-    }
+  const handleDeleteUser = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete User?',
+      message: `Are you sure you want to delete user "${name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        await deleteUserAdmin(id);
+        showSuccess(`User ${name} deleted successfully.`);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
-  const handleDeleteProduct = async (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete product "${name}"?`)) {
-      await deleteProductAdmin(id);
-      showSuccess(`Product ${name} deleted successfully.`);
-    }
+  const handleDeleteProduct = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Product?',
+      message: `Are you sure you want to delete product "${name}"?`,
+      onConfirm: async () => {
+        await deleteProductAdmin(id);
+        showSuccess(`Product ${name} deleted successfully.`);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
@@ -88,6 +111,33 @@ export default function AdminDashboard() {
         <div className="fixed top-24 right-8 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
           <CheckCircle className="w-5 h-5" />
           <span className="font-bold">{successMessage}</span>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 mb-4">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-500 mb-6">{confirmModal.message}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl font-bold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmModal.onConfirm}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-100"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

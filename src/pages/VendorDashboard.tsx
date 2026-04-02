@@ -54,6 +54,7 @@ export default function VendorDashboard() {
   const [variationCombinations, setVariationCombinations] = useState<VariationCombination[]>([]);
   const [showCombinations, setShowCombinations] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [profileData, setProfileData] = useState({
     storeName: currentUser?.storeName || '',
@@ -309,7 +310,8 @@ export default function VendorDashboard() {
     
     // Check if all types have names and options
     if (variationTypes.some(t => !t.name || t.options.length === 0)) {
-      alert('Please ensure all variation types have a name and at least one option.');
+      setErrorMessage('Please ensure all variation types have a name and at least one option.');
+      setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
 
@@ -384,7 +386,8 @@ export default function VendorDashboard() {
       setTimeout(() => setSuccessMessage(null), 5000);
       resetForm();
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      setErrorMessage(`Error: ${error.message}`);
+      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
@@ -441,6 +444,22 @@ export default function VendorDashboard() {
             <p className="text-sm text-green-700">Your changes have been saved and are now live.</p>
           </div>
           <button onClick={() => setSuccessMessage(null)} className="ml-auto text-green-400 hover:text-green-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Error Message Banner */}
+      {errorMessage && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="font-bold text-red-900">Action Failed</p>
+            <p className="text-sm text-red-700">{errorMessage}</p>
+          </div>
+          <button onClick={() => setErrorMessage(null)} className="ml-auto text-red-400 hover:text-red-600">
             <X className="w-5 h-5" />
           </button>
         </div>

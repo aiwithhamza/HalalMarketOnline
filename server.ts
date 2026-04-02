@@ -10,8 +10,8 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 
-const JWT_SECRET = 'super-secret-jwt-key-for-testing';
-const ADMIN_SECRET_KEY = 'HALAL_ADMIN_2026'; // The secret key for admin registration
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-for-testing';
+const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || 'HALAL_ADMIN_2026'; // The secret key for admin registration
 const PORT = 3000;
 
 // Initialize Database
