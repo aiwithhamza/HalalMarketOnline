@@ -1,7 +1,8 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Store, MapPin, Tag, ArrowLeft } from 'lucide-react';
+import { Store, MapPin, Tag, ArrowLeft, Star } from 'lucide-react';
+import ReviewSection from '../components/ReviewSection';
 
 export default function VendorShop() {
   const { id } = useParams<{ id: string }>();
@@ -58,11 +59,34 @@ export default function VendorShop() {
             )}
           </div>
           
-          <div className="mt-20">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{vendor.storeName || vendor.name}</h1>
-            <p className="text-gray-600 max-w-3xl leading-relaxed">
-              {vendor.storeDescription || 'A certified vendor on Halal Market Online.'}
-            </p>
+          <div className="mt-20 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="flex-grow">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{vendor.storeName || vendor.name}</h1>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star 
+                      key={s} 
+                      className={`w-4 h-4 ${s <= Math.round(vendor.rating || 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                    />
+                  ))}
+                </div>
+                <span className="text-sm font-bold text-gray-900">{vendor.rating?.toFixed(1) || '0.0'}</span>
+                <span className="text-sm text-gray-500">({vendor.reviewCount || 0} reviews)</span>
+              </div>
+              <p className="text-gray-600 max-w-3xl leading-relaxed">
+                {vendor.storeDescription || 'A certified vendor on Halal Market Online.'}
+              </p>
+            </div>
+            <div className="flex-shrink-0">
+              <Link 
+                to="/customer" 
+                state={{ activeTab: 'messages', openChatWith: vendor.id }}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+              >
+                Chat with Vendor
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -99,6 +123,11 @@ export default function VendorShop() {
               <div className="p-4 flex flex-col flex-grow">
                 <div className="text-xs text-emerald-600 font-semibold mb-1 uppercase tracking-wider">{product.category}</div>
                 <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">{product.name}</h3>
+                <div className="flex items-center gap-1 mb-2">
+                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                  <span className="text-xs font-bold text-gray-900">{product.rating?.toFixed(1) || '0.0'}</span>
+                  <span className="text-[10px] text-gray-400">({product.reviewCount || 0})</span>
+                </div>
                 <p className="text-gray-500 text-sm mb-4 line-clamp-2 flex-grow">{product.description}</p>
                 <div className="flex items-center justify-between mt-auto">
                   <span className="text-xl font-bold text-gray-900">{formatPrice(product.price, product.currency)}</span>
@@ -109,6 +138,11 @@ export default function VendorShop() {
           ))}
         </div>
       )}
+
+      {/* Vendor Reviews */}
+      <div className="mt-20 bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        <ReviewSection vendorId={vendor.id} />
+      </div>
     </div>
   );
 }

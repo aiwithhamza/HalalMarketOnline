@@ -56,6 +56,8 @@ export interface User {
   coverImage?: string;
   lastShippingDetails?: ShippingDetails;
   wishlist?: string[]; // Array of product IDs
+  rating?: number;
+  reviewCount?: number;
   createdAt: string;
 }
 
@@ -80,6 +82,8 @@ export interface Product {
   availableCountries?: string[]; // For Fresh Items
   availableCities?: string[]; // For Fresh Items
   variations?: ProductVariation[];
+  rating?: number;
+  reviewCount?: number;
 }
 
 export interface CartItem {
@@ -104,8 +108,10 @@ export interface OrderItem {
   productName: string;
   quantity: number;
   price: number;
+  currency: string;
   vendorId: string;
   selectedVariations?: Record<string, string>;
+  imageUrl?: string;
 }
 
 export interface ShippingDetails {
@@ -152,5 +158,18 @@ export interface ChatConversation {
   };
   lastMessage: ChatMessage;
   unreadCount: number;
+}
+
+export interface Review {
+  id: string;
+  userId: string;
+  userName: string;
+  userProfileImage?: string;
+  productId?: string; // If it's a product review
+  vendorId?: string; // If it's a vendor review
+  rating: number;
+  comment: string;
+  isVerifiedPurchase: boolean;
+  createdAt: string;
 }
 

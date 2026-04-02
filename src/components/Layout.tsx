@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Store, User as UserIcon, LogOut, Menu, X, Package, Search, MapPin, ChevronDown, Globe, Bell, MessageSquare } from 'lucide-react';
+import { ShoppingCart, Store, User as UserIcon, LogOut, Menu, X, Package, Search, MapPin, ChevronDown, Globe, Bell, MessageSquare, BarChart2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { SUPPORTED_CURRENCIES } from '../types';
 
@@ -99,6 +99,9 @@ export default function Layout() {
                     </Link>
                     {currentUser.role === 'vendor' && (
                       <Link to="/vendor" className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700">Vendor Dashboard</Link>
+                    )}
+                    {currentUser.role === 'admin' && (
+                      <Link to="/admin" className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700">Admin Dashboard</Link>
                     )}
                     <button onClick={handleLogout} className="w-full text-left block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700">
                       Sign Out

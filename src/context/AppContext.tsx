@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { User, Product, CartItem, Order, OrderStatus, ShippingDetails, PaymentMethod, SUPPORTED_CURRENCIES, Notification, ChatMessage, ChatConversation } from '../types';
+import { User, Product, CartItem, Order, OrderStatus, ShippingDetails, PaymentMethod, SUPPORTED_CURRENCIES, Notification, ChatMessage, ChatConversation, Review } from '../types';
 import { io, Socket } from 'socket.io-client';
 
 const EXCHANGE_RATES: Record<string, number> = {
@@ -65,6 +65,9 @@ interface AppContextType {
   fetchConversations: () => Promise<void>;
   fetchMessages: (otherUserId: string) => Promise<void>;
   sendMessage: (receiverId: string, content: string) => Promise<void>;
+  fetchProductReviews: (productId: string) => Promise<Review[]>;
+  fetchVendorReviews: (vendorId: string) => Promise<Review[]>;
+  submitReview: (review: { productId?: string, vendorId?: string, rating: number, comment: string }) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -147,7 +150,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const fetchVendors = async () => {
     try {
       const res = await fetch('/api/users/vendors');
-      if (res.ok) setVendors(await handleResponse(res));
+      if (res.ok) {
+        const data = await handleResponse(res);
+        setVendors(data.vendors || []);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -565,6 +571,46 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const submitReview = async (review: { productId?: string, vendorId?: string, rating: number, comment: string }) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(review)
+      });
+      if (res.ok) {
+        fetchProducts();
+        fetchVendors();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchProductReviews = async (productId: string): Promise<Review[]> => {
+    try {
+      const res = await fetch(`/api/reviews/product/${productId}`);
+      if (res.ok) return await handleResponse(res);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  };
+
+  const fetchVendorReviews = async (vendorId: string): Promise<Review[]> => {
+    try {
+      const res = await fetch(`/api/reviews/vendor/${vendorId}`);
+      if (res.ok) return await handleResponse(res);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -604,7 +650,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setActiveChatUserId,
       fetchConversations,
       fetchMessages,
-      sendMessage
+      sendMessage,
+      fetchProductReviews,
+      fetchVendorReviews,
+      submitReview
     }}>
       {children}
     </AppContext.Provider>

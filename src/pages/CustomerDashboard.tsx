@@ -37,7 +37,7 @@ export default function CustomerDashboard() {
   });
 
   if (!currentUser) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" state={{ from: location }} />;
   }
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,7 +171,7 @@ export default function CustomerDashboard() {
                           <div className="flex items-center gap-6">
                             <div className="text-right">
                               <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">Total</p>
-                              <p className="font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.product?.currency)}</p>
+                              <p className="font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.currency)}</p>
                             </div>
                             <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 capitalize ${getStatusColor(order.status)}`}>
                               {getStatusIcon(order.status)}
@@ -219,7 +219,7 @@ export default function CustomerDashboard() {
                                       )}
                                     </div>
                                   </div>
-                                  <span className="font-bold text-gray-900 text-sm">{formatPrice(item.price * item.quantity, item.product?.currency)}</span>
+                                  <span className="font-bold text-gray-900 text-sm">{formatPrice(item.price * item.quantity, item.currency)}</span>
                                 </div>
                               ))}
                             </div>

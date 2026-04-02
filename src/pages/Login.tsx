@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Store, User as UserIcon } from 'lucide-react';
 import { User, Role } from '../types';
@@ -7,6 +7,7 @@ import { User, Role } from '../types';
 export default function Login() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAppContext();
   
   const isSignup = searchParams.get('mode') === 'signup';
@@ -46,7 +47,15 @@ export default function Login() {
         if (res.ok) {
           login(data.user, data.token);
           const redirect = searchParams.get('redirect');
-          navigate(redirect || (data.user.role === 'vendor' ? '/vendor' : '/'));
+          const from = (location.state as any)?.from;
+          
+          if (redirect) {
+            navigate(redirect);
+          } else if (from) {
+            navigate(from.pathname, { state: from.state });
+          } else {
+            navigate(data.user.role === 'vendor' ? '/vendor' : '/');
+          }
         } else {
           setError(data.error || "Invalid credentials.");
         }
@@ -67,7 +76,15 @@ export default function Login() {
         if (res.ok) {
           login(data.user, data.token);
           const redirect = searchParams.get('redirect');
-          navigate(redirect || (data.user.role === 'vendor' ? '/vendor' : '/'));
+          const from = (location.state as any)?.from;
+
+          if (redirect) {
+            navigate(redirect);
+          } else if (from) {
+            navigate(from.pathname, { state: from.state });
+          } else {
+            navigate(data.user.role === 'vendor' ? '/vendor' : '/');
+          }
         } else {
           setError(data.error || "An error occurred during signup.");
         }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, Store, ShoppingCart, Check, AlertCircle, CheckCircle, MapPin, Tag, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Store, ShoppingCart, Check, AlertCircle, CheckCircle, MapPin, Tag, MessageSquare, Star } from 'lucide-react';
+import ReviewSection from '../components/ReviewSection';
 
 export default function ProductDetails() {
   const { id } = useParams<{ id: string }>();
@@ -78,6 +79,21 @@ export default function ProductDetails() {
           </div>
           
           <h1 className="text-3xl font-bold text-gray-900 mb-4">{product.name}</h1>
+          
+          {/* Rating Summary */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star 
+                  key={s} 
+                  className={`w-4 h-4 ${s <= Math.round(product.rating || 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                />
+              ))}
+            </div>
+            <span className="text-sm font-bold text-gray-900">{product.rating?.toFixed(1) || '0.0'}</span>
+            <span className="text-sm text-gray-500">({product.reviewCount || 0} reviews)</span>
+          </div>
+
           <p className="text-gray-600 mb-6 leading-relaxed">
             {product.description}
           </p>
@@ -216,12 +232,19 @@ export default function ProductDetails() {
 
             <button 
               onClick={() => {
+                const targetPath = currentUser?.role === 'vendor' ? '/vendor' : '/customer';
                 if (!currentUser) {
-                  navigate('/login');
+                  navigate('/login', { 
+                    state: { 
+                      from: { 
+                        pathname: targetPath, 
+                        state: { openChatWith: product.vendorId } 
+                      } 
+                    } 
+                  });
                   return;
                 }
-                const path = currentUser.role === 'vendor' ? '/vendor' : '/customer';
-                navigate(path, { state: { openChatWith: product.vendorId } });
+                navigate(targetPath, { state: { openChatWith: product.vendorId } });
               }}
               className="w-full mt-4 flex items-center justify-center gap-2 py-3 px-6 rounded-lg font-semibold border-2 border-green-600 text-green-600 hover:bg-green-50 transition-all"
             >
@@ -231,6 +254,11 @@ export default function ProductDetails() {
         </div>
       </div>
       
+      {/* Reviews Section */}
+      <div className="mt-12 bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        <ReviewSection productId={product.id} />
+      </div>
+
       {/* More from vendor section */}
       <div className="mt-12">
         <h3 className="text-xl font-bold text-gray-900 mb-6">More from {product.vendorName}</h3>

@@ -56,9 +56,19 @@ export default function Home() {
                           product.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
+    if ((b.rating || 0) !== (a.rating || 0)) {
+      return (b.rating || 0) - (a.rating || 0);
+    }
+    return (b.reviewCount || 0) - (a.reviewCount || 0);
   });
 
-  const featuredProducts = products.slice(0, 4);
+  const featuredProducts = [...products].sort((a, b) => {
+    if ((b.rating || 0) !== (a.rating || 0)) {
+      return (b.rating || 0) - (a.rating || 0);
+    }
+    return (b.reviewCount || 0) - (a.reviewCount || 0);
+  }).slice(0, 4);
   
   // Filter fresh items based on selected country and city
   const freshItems = products.filter(p => {
@@ -68,6 +78,11 @@ export default function Home() {
     const matchesCity = selectedCity === 'All Cities' || p.availableCities?.includes(selectedCity);
     
     return matchesCountry && matchesCity;
+  }).sort((a, b) => {
+    if ((b.rating || 0) !== (a.rating || 0)) {
+      return (b.rating || 0) - (a.rating || 0);
+    }
+    return (b.reviewCount || 0) - (a.reviewCount || 0);
   });
 
   return (
@@ -326,6 +341,11 @@ function ProductCard({ product, addToCart }: { product: any, addToCart: any, key
               {product.name}
             </h3>
           </Link>
+          <div className="flex items-center gap-1 mt-1">
+            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+            <span className="text-xs font-bold text-gray-900">{product.rating?.toFixed(1) || '0.0'}</span>
+            <span className="text-[10px] text-gray-400">({product.reviewCount || 0})</span>
+          </div>
         </div>
         
         {product.availableCities && product.availableCities.length > 0 && (

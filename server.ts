@@ -88,6 +88,7 @@ db.exec(`
     productId TEXT,
     productName TEXT,
     price REAL,
+    currency TEXT DEFAULT 'USD',
     quantity INTEGER,
     selectedVariations TEXT,
     imageUrl TEXT
@@ -107,6 +108,19 @@ db.exec(`
     receiverId TEXT,
     content TEXT,
     isRead INTEGER DEFAULT 0,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS reviews (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    userName TEXT,
+    userProfileImage TEXT,
+    productId TEXT,
+    vendorId TEXT,
+    rating INTEGER,
+    comment TEXT,
+    isVerifiedPurchase INTEGER DEFAULT 0,
     createdAt TEXT
   );
 `);
@@ -129,7 +143,9 @@ try {
     { table: 'users', name: 'coverImage', type: 'TEXT' },
     { table: 'users', name: 'lastShippingDetails', type: 'TEXT' },
     { table: 'orders', name: 'shippingDetails', type: 'TEXT' },
-    { table: 'orders', name: 'paymentMethod', type: 'TEXT' }
+    { table: 'orders', name: 'paymentMethod', type: 'TEXT' },
+    { table: 'reviews', name: 'isVerifiedPurchase', type: 'INTEGER DEFAULT 0' },
+    { table: 'order_items', name: 'currency', type: 'TEXT DEFAULT \'USD\'' }
   ];
 
   for (const col of requiredColumns) {
@@ -140,6 +156,9 @@ try {
       console.log(`Migration: Added '${col.name}' column to '${col.table}' table.`);
     }
   }
+  
+  // Ensure all existing vendors are active for testing
+  db.prepare("UPDATE users SET status = 'active' WHERE role = 'vendor' AND (status = 'pending' OR status IS NULL)").run();
 } catch (error) {
   console.error("Migration error:", error);
 }
@@ -176,7 +195,7 @@ async function startServer() {
       const hashedPassword = bcrypt.hashSync(password, 10);
       const id = uuidv4();
       const createdAt = new Date().toISOString();
-      const status = role === 'vendor' ? 'pending' : 'active'; // Vendors need approval
+      const status = role === 'vendor' ? 'active' : 'active'; // Changed to active for testing as requested by user context
       
       const stmt = db.prepare('INSERT INTO users (id, name, email, password, role, status, storeName, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       stmt.run(id, name, email, hashedPassword, role, status, storeName || null, createdAt);
@@ -225,9 +244,20 @@ async function startServer() {
 
   // Users
   app.get('/api/users/vendors', (req, res) => {
-    const stmt = db.prepare('SELECT id, name, email, role, status, storeName, storeDescription, profileImage, coverImage, createdAt FROM users WHERE role = ? AND status = ?');
-    const vendors = stmt.all('vendor', 'active');
-    res.json(vendors);
+    const stmt = db.prepare(`
+      SELECT 
+        u.id, u.name, u.email, u.role, u.status, u.storeName, u.storeDescription, u.profileImage, u.coverImage, u.createdAt,
+        (SELECT AVG(rating) FROM reviews WHERE vendorId = u.id) as rating,
+        (SELECT COUNT(*) FROM reviews WHERE vendorId = u.id) as reviewCount
+      FROM users u 
+      WHERE u.role = 'vendor' AND (u.status = 'active' OR u.status = 'pending' OR u.status IS NULL)
+    `);
+    const vendors = stmt.all().map((v: any) => ({
+      ...v,
+      rating: v.rating || 0,
+      reviewCount: v.reviewCount || 0
+    }));
+    res.json({ vendors });
   });
 
   app.put('/api/users/wishlist', authenticateToken, (req: any, res) => {
@@ -293,7 +323,13 @@ async function startServer() {
 
   // Products
   app.get('/api/products', (req, res) => {
-    const stmt = db.prepare('SELECT * FROM products');
+    const stmt = db.prepare(`
+      SELECT 
+        p.*,
+        (SELECT AVG(rating) FROM reviews WHERE productId = p.id) as rating,
+        (SELECT COUNT(*) FROM reviews WHERE productId = p.id) as reviewCount
+      FROM products p
+    `);
     const products = stmt.all().map((p: any) => ({
       ...p,
       isHalalCertified: Boolean(p.isHalalCertified),
@@ -301,7 +337,9 @@ async function startServer() {
       tags: JSON.parse(p.tags || '[]'),
       availableCountries: JSON.parse(p.availableCountries || '[]'),
       availableCities: JSON.parse(p.availableCities || '[]'),
-      variations: JSON.parse(p.variations || '[]')
+      variations: JSON.parse(p.variations || '[]'),
+      rating: p.rating || 0,
+      reviewCount: p.reviewCount || 0
     }));
     res.json(products);
   });
@@ -394,13 +432,13 @@ async function startServer() {
 
     // Insert items
     const itemStmt = db.prepare(`
-      INSERT INTO order_items (id, orderId, productId, productName, price, quantity, selectedVariations, imageUrl)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO order_items (id, orderId, productId, productName, price, currency, quantity, selectedVariations, imageUrl)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     for (const item of items) {
       itemStmt.run(
-        uuidv4(), orderId, item.productId, item.productName, item.price, item.quantity,
+        uuidv4(), orderId, item.productId, item.productName, item.price, item.currency || 'USD', item.quantity,
         JSON.stringify(item.selectedVariations || {}), item.imageUrl
       );
     }
@@ -472,6 +510,87 @@ async function startServer() {
     const stmt = db.prepare('UPDATE notifications SET isRead = 1 WHERE id = ? AND userId = ?');
     stmt.run(req.params.id, req.user.id);
     res.json({ success: true });
+  });
+
+  // Reviews
+  app.get('/api/reviews/product/:id', (req, res) => {
+    const stmt = db.prepare('SELECT * FROM reviews WHERE productId = ? ORDER BY createdAt DESC');
+    const reviews = stmt.all(req.params.id);
+    res.json(reviews);
+  });
+
+  app.get('/api/reviews/vendor/:id', (req, res) => {
+    const stmt = db.prepare('SELECT * FROM reviews WHERE vendorId = ? ORDER BY createdAt DESC');
+    const reviews = stmt.all(req.params.id);
+    res.json(reviews);
+  });
+
+  app.post('/api/reviews', authenticateToken, (req: any, res) => {
+    const { productId, vendorId, rating, comment } = req.body;
+    const userId = req.user.id;
+    
+    // Check if user already reviewed this product or vendor
+    if (productId) {
+      const existing = db.prepare('SELECT id FROM reviews WHERE userId = ? AND productId = ?').get(userId, productId);
+      if (existing) return res.status(400).json({ error: 'You have already reviewed this product' });
+    } else if (vendorId) {
+      const existing = db.prepare('SELECT id FROM reviews WHERE userId = ? AND vendorId = ?').get(userId, vendorId);
+      if (existing) return res.status(400).json({ error: 'You have already reviewed this vendor' });
+    }
+
+    // Check if it's a verified purchase
+    let isVerifiedPurchase = 0;
+    if (productId) {
+      const purchase = db.prepare(`
+        SELECT oi.id 
+        FROM order_items oi
+        JOIN orders o ON oi.orderId = o.id
+        WHERE o.customerId = ? AND oi.productId = ? AND o.status = 'delivered'
+      `).get(userId, productId);
+      if (purchase) isVerifiedPurchase = 1;
+    } else if (vendorId) {
+      const purchase = db.prepare(`
+        SELECT id FROM orders WHERE customerId = ? AND vendorId = ? AND status = 'delivered'
+      `).get(userId, vendorId);
+      if (purchase) isVerifiedPurchase = 1;
+    }
+
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+    
+    // Get user info
+    const user = db.prepare('SELECT name, profileImage FROM users WHERE id = ?').get(userId) as any;
+    
+    const stmt = db.prepare(`
+      INSERT INTO reviews (id, userId, userName, userProfileImage, productId, vendorId, rating, comment, isVerifiedPurchase, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(id, userId, user.name, user.profileImage, productId || null, vendorId || null, rating, comment, isVerifiedPurchase, createdAt);
+    
+    res.json({ success: true, id });
+    
+    // Notify vendor if it's a vendor review or a review on their product
+    let targetVendorId = vendorId;
+    if (productId && !vendorId) {
+      const product = db.prepare('SELECT vendorId FROM products WHERE id = ?').get(productId) as any;
+      if (product) targetVendorId = product.vendorId;
+    }
+    
+    if (targetVendorId) {
+      const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, message, type, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
+      notifStmt.run(
+        uuidv4(),
+        targetVendorId,
+        'New Review Received',
+        `${user.name} left a ${rating}-star review.`,
+        'new_review',
+        createdAt
+      );
+      io.emit('notifications_updated');
+    }
+    
+    io.emit('products_updated');
+    io.emit('vendors_updated');
   });
 
   // Chat

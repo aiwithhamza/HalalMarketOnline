@@ -675,7 +675,7 @@ export default function VendorDashboard() {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-sm text-gray-500 mb-1">Total</p>
-                      <p className="font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.product?.currency)}</p>
+                      <p className="font-bold text-gray-900">{formatPrice(order.totalAmount, order.items[0]?.currency)}</p>
                     </div>
                     
                     <div className="flex flex-col items-end gap-2">
@@ -716,7 +716,7 @@ export default function VendorDashboard() {
                               )}
                             </div>
                           </div>
-                          <span className="text-gray-600">{item.product?.currency || '$'} {(item.price * item.quantity).toFixed(2)}</span>
+                          <span className="text-gray-600">{formatPrice(item.price * item.quantity, item.currency)}</span>
                         </div>
                       ))}
                     </div>
