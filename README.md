@@ -1,20 +1,60 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Halal Market Online - Deployment Guide
 
-# Run and deploy your AI Studio app
+This project is a full-stack e-commerce marketplace built with React, Vite, Express, and SQLite. It is prepared for both web hosting and Android testing.
 
-This contains everything you need to run your app locally.
+## 🚀 Online Deployment
 
-View your app in AI Studio: https://ai.studio/apps/8a7cf184-7e59-491d-9535-b27119894ca8
+### 1. Google Cloud Run (Recommended for AI Studio)
+The easiest way to deploy is using the **"Deploy"** button in the AI Studio Build interface. This will package your app and host it on Google Cloud.
 
-## Run Locally
+### 2. Render / Railway / Heroku
+These platforms are excellent for full-stack applications.
+- **Build Command:** `npm install && npm run build`
+- **Start Command:** `npm start`
+- **Environment Variables:**
+  - `NODE_ENV=production`
+  - `JWT_SECRET`: A secure random string for authentication.
+  - `ADMIN_SECRET_KEY`: `HALAL_ADMIN_2026` (or your preferred key).
+  - `DATABASE_PATH`: If using persistent storage, set this to the path of your mounted volume (e.g., `/app/data/database.sqlite`).
 
-**Prerequisites:**  Node.js
+**Note on SQLite Persistence:**
+When deploying to platforms like Render or Railway, you **must** use a "Persistent Disk" or "Volume" to ensure your database is not wiped when the server restarts. Mount the volume at `/app/data` and set `DATABASE_PATH=/app/data/database.sqlite`.
 
+---
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 📱 Android Testing
+
+This project uses **Capacitor** to turn the web app into a native Android app.
+
+### Prerequisites
+- [Android Studio](https://developer.android.com/studio) installed on your local machine.
+- Node.js and npm installed.
+
+### Steps to Generate APK
+1. **Export Code:** Use the **Settings > Export to ZIP** menu in AI Studio.
+2. **Local Setup:**
+   ```bash
+   npm install
+   npm run build
+   ```
+3. **Android Platform:**
+   ```bash
+   npm run cap:add    # Adds the Android platform (first time only)
+   npm run cap:sync   # Syncs your web code to the Android project
+   ```
+4. **Build APK:**
+   ```bash
+   npm run cap:open   # Opens the project in Android Studio
+   ```
+   In Android Studio, go to **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
+
+### Distribution
+- **Firebase App Distribution:** Upload the generated APK to the Firebase Console and invite testers via email.
+- **Google Play Internal Testing:** Upload the APK to the Google Play Console under the "Internal Testing" track.
+
+---
+
+## 🛠️ Tech Stack
+- **Frontend:** React, Vite, Tailwind CSS, Lucide Icons, Framer Motion.
+- **Backend:** Express.js, Socket.IO, Better-SQLite3.
+- **Mobile:** Capacitor.

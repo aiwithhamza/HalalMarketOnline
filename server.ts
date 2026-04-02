@@ -15,7 +15,7 @@ const ADMIN_SECRET_KEY = 'HALAL_ADMIN_2026'; // The secret key for admin registr
 const PORT = 3000;
 
 // Initialize Database
-const dbPath = path.join(process.cwd(), 'database.sqlite');
+const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'database.sqlite');
 const db = new Database(dbPath);
 
 // Create tables
@@ -190,6 +190,11 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
+
+  // Health check for hosting platforms
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
   // Middleware to authenticate JWT
   const authenticateToken = (req: any, res: any, next: any) => {
