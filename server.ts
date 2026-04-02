@@ -147,6 +147,7 @@ try {
     { table: 'users', name: 'lastShippingDetails', type: 'TEXT' },
     { table: 'orders', name: 'shippingDetails', type: 'TEXT' },
     { table: 'orders', name: 'paymentMethod', type: 'TEXT' },
+    { table: 'orders', name: 'currency', type: 'TEXT DEFAULT \'USD\'' },
     { table: 'reviews', name: 'isVerifiedPurchase', type: 'INTEGER DEFAULT 0' },
     { table: 'order_items', name: 'currency', type: 'TEXT DEFAULT \'USD\'' }
   ];
@@ -189,6 +190,10 @@ async function startServer() {
   });
 
   app.use(cors());
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -221,14 +226,14 @@ async function startServer() {
   // --- API ROUTES ---
 
   // Auth
-  app.post('/api/auth/register', (req, res) => {
-    console.log('POST /api/auth/register', req.body?.email);
-    const { name, email, password, role, storeName, adminSecret } = req.body;
+  app.post('/api/account/register', (req, res) => {
+    console.log('POST /api/account/register', req.body?.email);
+    const { name, email, password, role, storeName, accessKey } = req.body;
     try {
       // Check admin secret if role is admin
       if (role === 'admin') {
-        if (adminSecret !== ADMIN_SECRET_KEY) {
-          return res.status(403).json({ error: 'Invalid admin secret key. You are not authorized to register as an administrator.' });
+        if (accessKey !== ADMIN_SECRET_KEY) {
+          return res.status(403).json({ error: 'Invalid admin access key. You are not authorized to register as an administrator.' });
         }
       }
 
@@ -251,8 +256,8 @@ async function startServer() {
     }
   });
 
-  app.post('/api/auth/login', (req, res) => {
-    console.log('POST /api/auth/login', req.body?.email);
+  app.post('/api/account/login', (req, res) => {
+    console.log('POST /api/account/login', req.body?.email);
     const { email, password } = req.body;
     const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
     const user = stmt.get(email) as any;
@@ -266,7 +271,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/auth/me', authenticateToken, (req: any, res) => {
+  app.get('/api/account/me', authenticateToken, (req: any, res) => {
     const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
     const user = stmt.get(req.user.id) as any;
     if (user) {
@@ -526,8 +531,8 @@ async function startServer() {
 
     // Insert order
     const stmt = db.prepare(`
-      INSERT INTO orders (id, customerId, customerName, vendorId, vendorName, status, totalAmount, createdAt, shippingDetails, paymentMethod)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO orders (id, customerId, customerName, vendorId, vendorName, status, totalAmount, currency, createdAt, shippingDetails, paymentMethod)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     // Get customer name
@@ -535,7 +540,7 @@ async function startServer() {
     const customer = userStmt.get(req.user.id) as any;
 
     stmt.run(
-      orderId, req.user.id, customer.name, vendorId, vendorName, 'pending', totalAmount, createdAt,
+      orderId, req.user.id, customer.name, vendorId, vendorName, 'pending', totalAmount, req.body.currency || 'USD', createdAt,
       JSON.stringify(shippingDetails), paymentMethod
     );
 

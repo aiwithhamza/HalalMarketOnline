@@ -143,6 +143,7 @@ export interface Order {
   vendorId: string;
   items: OrderItem[];
   totalAmount: number;
+  currency: string;
   status: OrderStatus;
   createdAt: string;
   shippingDetails: ShippingDetails;

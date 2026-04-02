@@ -259,7 +259,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const initAuth = async () => {
       if (token) {
         try {
-          const res = await fetch('/api/auth/me', {
+          const res = await fetch('/api/account/me', {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (res.ok) {
@@ -439,12 +439,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     // Create an order for each vendor
     for (const [vendorId, items] of Object.entries(itemsByVendor)) {
       const vendor = vendors.find(v => v.id === vendorId);
-      const totalAmount = (items as CartItem[]).reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+      const orderCurrency = (items as CartItem[])[0]?.product?.currency || 'USD';
+      const totalAmount = (items as CartItem[]).reduce((sum, item) => {
+        const itemTotal = item.product.price * item.quantity;
+        return sum + convertPrice(itemTotal, item.product.currency, orderCurrency);
+      }, 0);
 
       const orderItems = (items as CartItem[]).map(item => ({
         productId: item.product.id,
         productName: item.product.name,
         price: item.product.price,
+        currency: item.product.currency,
         quantity: item.quantity,
         selectedVariations: item.selectedVariations,
         imageUrl: item.product.imageUrl
@@ -461,6 +466,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           vendorName: vendor?.storeName || vendor?.name || 'Unknown Vendor',
           items: orderItems,
           totalAmount,
+          currency: orderCurrency,
           shippingDetails,
           paymentMethod
         })

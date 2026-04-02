@@ -39,7 +39,7 @@ export default function Login() {
     
     try {
       if (isLoginMode) {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch('/api/account/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: formData.email, password: formData.password })
@@ -70,7 +70,7 @@ export default function Login() {
         }
       } else {
         // Signup mode
-        const res = await fetch('/api/auth/register', {
+        const res = await fetch('/api/account/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -79,7 +79,7 @@ export default function Login() {
             password: formData.password,
             role: role,
             storeName: role === 'vendor' ? (formData.storeName || `${formData.name}'s Store`) : undefined,
-            adminSecret: role === 'admin' ? formData.adminSecret : undefined
+            accessKey: role === 'admin' ? formData.adminSecret : undefined
           })
         });
 

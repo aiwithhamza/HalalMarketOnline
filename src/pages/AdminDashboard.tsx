@@ -463,7 +463,7 @@ export default function AdminDashboard() {
                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 8).toUpperCase()}</td>
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">{order.customerName}</td>
-                      <td className="px-6 py-4 font-bold text-emerald-600">{formatPrice(order.totalAmount, order.items[0]?.currency)}</td>
+                      <td className="px-6 py-4 font-bold text-emerald-600">{formatPrice(order.totalAmount, order.currency)}</td>
                       <td className="px-6 py-4">
                         <select 
                           value={order.status}

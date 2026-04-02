@@ -42,7 +42,7 @@ export default function VendorShop() {
         </div>
         
         <div className="px-8 pb-8 relative">
-          <div className="absolute -top-16 left-8">
+          <div className="absolute -top-16 left-8 z-10">
             {vendor.profileImage ? (
               <img 
                 src={vendor.profileImage} 
@@ -59,7 +59,7 @@ export default function VendorShop() {
             )}
           </div>
           
-          <div className="mt-20 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="pt-20 md:pt-16 flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div className="flex-grow">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{vendor.storeName || vendor.name}</h1>
               <div className="flex items-center gap-4 mb-4">
