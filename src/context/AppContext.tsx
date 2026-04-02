@@ -51,9 +51,18 @@ interface AppContextType {
   toggleWishlist: (productId: string) => Promise<void>;
   adminStats: any;
   adminVendors: User[];
+  adminProducts: Product[];
+  adminOrders: Order[];
+  adminCustomers: User[];
   fetchAdminStats: () => Promise<void>;
   fetchAdminVendors: () => Promise<void>;
+  fetchAdminProducts: () => Promise<void>;
+  fetchAdminOrders: () => Promise<void>;
+  fetchAdminCustomers: () => Promise<void>;
   updateVendorStatus: (vendorId: string, status: string) => Promise<void>;
+  deleteUserAdmin: (id: string) => Promise<void>;
+  deleteProductAdmin: (id: string) => Promise<void>;
+  updateOrderStatusAdmin: (orderId: string, status: OrderStatus, description?: string) => Promise<void>;
   customers: User[];
   isAuthReady: boolean;
   notifications: Notification[];
@@ -113,6 +122,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [adminStats, setAdminStats] = useState<any>(null);
   const [adminVendors, setAdminVendors] = useState<User[]>([]);
+  const [adminProducts, setAdminProducts] = useState<Product[]>([]);
+  const [adminOrders, setAdminOrders] = useState<Order[]>([]);
+  const [adminCustomers, setAdminCustomers] = useState<User[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
   const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
@@ -207,6 +219,42 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const fetchAdminProducts = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/products', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminProducts(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchAdminOrders = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminOrders(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchAdminCustomers = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/customers', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminCustomers(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       if (token) {
@@ -240,6 +288,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (currentUser?.role === 'admin') {
         fetchAdminStats();
         fetchAdminVendors();
+        fetchAdminProducts();
+        fetchAdminOrders();
+        fetchAdminCustomers();
       }
     }
 
@@ -511,6 +562,59 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteUserAdmin = async (id: string) => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchAdminVendors();
+        fetchAdminCustomers();
+        fetchAdminStats();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteProductAdmin = async (id: string) => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchAdminProducts();
+        fetchProducts();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateOrderStatusAdmin = async (orderId: string, status: OrderStatus, description?: string) => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status, description })
+      });
+      if (res.ok) {
+        fetchAdminOrders();
+        fetchAdminStats();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const markNotificationAsRead = async (id: string) => {
     if (!token) return;
     try {
@@ -637,9 +741,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       toggleWishlist,
       adminStats,
       adminVendors,
+      adminProducts,
+      adminOrders,
+      adminCustomers,
       fetchAdminStats,
       fetchAdminVendors,
+      fetchAdminProducts,
+      fetchAdminOrders,
+      fetchAdminCustomers,
       updateVendorStatus,
+      deleteUserAdmin,
+      deleteProductAdmin,
+      updateOrderStatusAdmin,
       customers,
       isAuthReady,
       notifications,

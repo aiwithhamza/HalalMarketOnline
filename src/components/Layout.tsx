@@ -33,38 +33,40 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
       {/* Main Header */}
-      <header className="bg-emerald-900 text-white sticky top-0 z-50">
+      <header className="bg-emerald-950 text-white sticky top-0 z-50 border-b border-emerald-900/50 backdrop-blur-md bg-emerald-950/95">
         <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 gap-4">
             
             {/* Logo */}
             <div className="flex items-center flex-shrink-0 mr-2">
-              <Link to="/" className="flex items-center gap-2 hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm transition-all">
-                <Store className="h-8 w-8 text-green-400" />
+              <Link to="/" className="flex items-center gap-2 hover:bg-white/5 p-2 rounded-xl transition-all group">
+                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+                  <Store className="h-6 w-6 text-white" />
+                </div>
                 <div className="flex flex-col leading-tight hidden sm:flex">
                   <span className="font-bold text-lg lg:text-xl tracking-tight text-white">Halal Market</span>
-                  <span className="text-[10px] text-emerald-200 tracking-widest uppercase">Online</span>
+                  <span className="text-[10px] text-emerald-400 tracking-widest uppercase font-black">Online</span>
                 </div>
               </Link>
             </div>
 
             {/* Search Bar */}
             <div className="hidden md:flex flex-1 min-w-0 max-w-3xl mx-2 lg:mx-4">
-              <form onSubmit={handleSearch} className="flex w-full rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-green-400">
-                <select className="bg-gray-100 text-gray-700 text-sm px-2 lg:px-3 py-2 border-r border-gray-300 outline-none cursor-pointer hover:bg-gray-200 hidden lg:block">
-                  <option>All</option>
+              <form onSubmit={handleSearch} className="flex w-full rounded-xl overflow-hidden ring-1 ring-emerald-800 focus-within:ring-2 focus-within:ring-emerald-400 bg-emerald-900/30">
+                <select className="bg-emerald-900/50 text-emerald-100 text-sm px-2 lg:px-3 py-2 border-r border-emerald-800 outline-none cursor-pointer hover:bg-emerald-800 transition-colors hidden lg:block">
+                  <option>All Categories</option>
                   <option>Fresh Meat</option>
                   <option>Groceries</option>
                   <option>Bakery</option>
                 </select>
                 <input 
                   type="text" 
-                  placeholder="Search Halal Market Online" 
+                  placeholder="Search for Halal products..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-grow px-4 py-2 text-white outline-none placeholder:text-white/70 bg-emerald-800/40"
+                  className="flex-grow px-4 py-2 text-white outline-none placeholder:text-emerald-400/50 bg-transparent"
                 />
-                <button type="submit" className="bg-green-500 hover:bg-green-600 px-4 lg:px-5 py-2 transition-colors flex items-center justify-center flex-shrink-0">
+                <button type="submit" className="bg-emerald-500 hover:bg-emerald-400 px-4 lg:px-5 py-2 transition-colors flex items-center justify-center flex-shrink-0">
                   <Search className="w-5 h-5 text-white" />
                 </button>
               </form>
@@ -181,15 +183,15 @@ export default function Layout() {
 
           {/* Mobile Search Bar */}
           <div className="md:hidden pb-3">
-            <form onSubmit={handleSearch} className="flex w-full rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-green-400">
+            <form onSubmit={handleSearch} className="flex w-full rounded-xl overflow-hidden ring-1 ring-emerald-800 focus-within:ring-2 focus-within:ring-emerald-400 bg-emerald-900/30">
               <input 
                 type="text" 
-                placeholder="Search Halal Market Online" 
+                placeholder="Search for Halal products..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-grow px-4 py-2 text-white outline-none text-sm placeholder:text-white bg-emerald-800/40"
+                className="flex-grow px-4 py-2 text-white outline-none text-sm placeholder:text-emerald-400/50 bg-transparent"
               />
-              <button type="submit" className="bg-green-500 hover:bg-green-600 px-4 py-2 transition-colors flex items-center justify-center">
+              <button type="submit" className="bg-emerald-500 hover:bg-emerald-400 px-4 py-2 transition-colors flex items-center justify-center">
                 <Search className="w-5 h-5 text-white" />
               </button>
             </form>
@@ -386,10 +388,13 @@ export default function Layout() {
             </ul>
           </div>
           <div>
-            <h4 className="font-bold mb-4 text-lg">Let Us Help You</h4>
+            <h4 className="font-bold mb-4 text-lg text-emerald-200">Let Us Help You</h4>
             <ul className="space-y-2 text-sm text-gray-300">
               <li><Link to={currentUser ? (currentUser.role === 'vendor' ? "/vendor" : "/customer") : "/login"} className="hover:underline">Your Account</Link></li>
               <li><Link to={currentUser ? (currentUser.role === 'vendor' ? "/vendor" : "/customer") : "/login"} className="hover:underline">Your Orders</Link></li>
+              {currentUser?.role === 'admin' && (
+                <li><Link to="/admin" className="hover:underline text-emerald-400 font-bold">Admin Panel</Link></li>
+              )}
               <li><Link to="/help" className="hover:underline">Shipping Rates & Policies</Link></li>
               <li><Link to="/help" className="hover:underline">Returns & Replacements</Link></li>
               <li><Link to="/help" className="hover:underline">Help</Link></li>

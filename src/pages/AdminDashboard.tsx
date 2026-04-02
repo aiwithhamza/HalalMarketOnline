@@ -1,15 +1,33 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Users, Store, DollarSign, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { 
+  Users, Store, DollarSign, Clock, CheckCircle, XCircle, AlertCircle, 
+  Package, ShoppingBag, Search, Filter, Trash2, Eye, ChevronRight, 
+  TrendingUp, Activity, ShieldCheck, User as UserIcon
+} from 'lucide-react';
+import { OrderStatus } from '../types';
+
+type AdminTab = 'overview' | 'vendors' | 'products' | 'orders' | 'customers';
 
 export default function AdminDashboard() {
-  const { currentUser, adminStats, adminVendors, fetchAdminStats, fetchAdminVendors, updateVendorStatus, formatPrice } = useAppContext();
+  const { 
+    currentUser, adminStats, adminVendors, adminProducts, adminOrders, adminCustomers,
+    fetchAdminStats, fetchAdminVendors, fetchAdminProducts, fetchAdminOrders, fetchAdminCustomers,
+    updateVendorStatus, deleteUserAdmin, deleteProductAdmin, updateOrderStatusAdmin, formatPrice 
+  } = useAppContext();
+
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUser?.role === 'admin') {
       fetchAdminStats();
       fetchAdminVendors();
+      fetchAdminProducts();
+      fetchAdminOrders();
+      fetchAdminCustomers();
     }
   }, [currentUser]);
 
@@ -17,136 +35,469 @@ export default function AdminDashboard() {
     return <Navigate to="/" />;
   }
 
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 5000);
+  };
+
+  const handleDeleteUser = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete user "${name}"? This action cannot be undone.`)) {
+      await deleteUserAdmin(id);
+      showSuccess(`User ${name} deleted successfully.`);
+    }
+  };
+
+  const handleDeleteProduct = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete product "${name}"?`)) {
+      await deleteProductAdmin(id);
+      showSuccess(`Product ${name} deleted successfully.`);
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    await updateOrderStatusAdmin(orderId, status);
+    showSuccess(`Order status updated to ${status}.`);
+  };
+
+  const filteredVendors = adminVendors.filter(v => 
+    v.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    v.storeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    v.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredProducts = adminProducts.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.vendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredOrders = adminOrders.filter(o => 
+    o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    o.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredCustomers = adminCustomers.filter(c => 
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    c.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Admin Control Panel</h1>
-        <p className="text-gray-500 mt-2">Monitor platform performance and manage vendor approvals.</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-100 rounded-xl text-green-600">
-              <DollarSign className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">{formatPrice(adminStats?.totalRevenue || 0)}</p>
-            </div>
-          </div>
+      {/* Success Message Banner */}
+      {successMessage && (
+        <div className="fixed top-24 right-8 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
+          <CheckCircle className="w-5 h-5" />
+          <span className="font-bold">{successMessage}</span>
         </div>
+      )}
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total Customers</p>
-              <p className="text-2xl font-bold text-gray-900">{adminStats?.totalCustomers || 0}</p>
-            </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-emerald-600 font-bold mb-1">
+            <ShieldCheck className="w-5 h-5" />
+            <span className="uppercase tracking-widest text-xs">Administrator Panel</span>
           </div>
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Control Center</h1>
+          <p className="text-gray-500 mt-1">Global platform management and oversight.</p>
         </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-100 rounded-xl text-purple-600">
-              <Store className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total Vendors</p>
-              <p className="text-2xl font-bold text-gray-900">{adminStats?.totalVendors || 0}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-100 rounded-xl text-yellow-600">
-              <Clock className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Pending Approvals</p>
-              <p className="text-2xl font-bold text-gray-900">{adminStats?.pendingVendors || 0}</p>
-            </div>
-          </div>
+        
+        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+          {(['overview', 'vendors', 'products', 'orders', 'customers'] as AdminTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                setSearchTerm('');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all capitalize ${
+                activeTab === tab 
+                  ? 'bg-emerald-600 text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Vendor Management */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900">Vendor Management</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Store / Vendor</th>
-                <th className="px-6 py-4 font-semibold">Email</th>
-                <th className="px-6 py-4 font-semibold">Joined Date</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {adminVendors.map((vendor) => (
-                <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{vendor.storeName || 'No Store Name'}</div>
-                    <div className="text-sm text-gray-500">{vendor.name}</div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{vendor.email}</td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                      vendor.status === 'active' ? 'bg-green-100 text-green-700' :
-                      vendor.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      {vendor.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      {vendor.status !== 'active' && (
-                        <button
-                          onClick={() => updateVendorStatus(vendor.id, 'active')}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          title="Approve Vendor"
-                        >
-                          <CheckCircle className="w-5 h-5" />
-                        </button>
-                      )}
-                      {vendor.status !== 'suspended' && (
-                        <button
-                          onClick={() => updateVendorStatus(vendor.id, 'suspended')}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Suspend Vendor"
-                        >
-                          <XCircle className="w-5 h-5" />
-                        </button>
-                      )}
+      {activeTab === 'overview' && (
+        <div className="space-y-8">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden group">
+              <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
+                <DollarSign className="w-24 h-24" />
+              </div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-emerald-100 rounded-xl text-emerald-600">
+                  <DollarSign className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Total Revenue</span>
+              </div>
+              <p className="text-3xl font-black text-gray-900">{formatPrice(adminStats?.totalRevenue || 0)}</p>
+              <div className="mt-4 flex items-center gap-1 text-emerald-600 text-xs font-bold">
+                <TrendingUp className="w-3 h-3" />
+                <span>+12.5% from last month</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden group">
+              <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
+                <Users className="w-24 h-24" />
+              </div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
+                  <Users className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Customers</span>
+              </div>
+              <p className="text-3xl font-black text-gray-900">{adminStats?.totalCustomers || 0}</p>
+              <div className="mt-4 flex items-center gap-1 text-blue-600 text-xs font-bold">
+                <Activity className="w-3 h-3" />
+                <span>Active users online</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden group">
+              <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
+                <Store className="w-24 h-24" />
+              </div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-purple-100 rounded-xl text-purple-600">
+                  <Store className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Vendors</span>
+              </div>
+              <p className="text-3xl font-black text-gray-900">{adminStats?.totalVendors || 0}</p>
+              <div className="mt-4 flex items-center gap-1 text-purple-600 text-xs font-bold">
+                <CheckCircle className="w-3 h-3" />
+                <span>{adminStats?.totalVendors - adminStats?.pendingVendors} verified partners</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden group">
+              <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
+                <Clock className="w-24 h-24" />
+              </div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-amber-100 rounded-xl text-amber-600">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pending</span>
+              </div>
+              <p className="text-3xl font-black text-gray-900">{adminStats?.pendingVendors || 0}</p>
+              <div className="mt-4 flex items-center gap-1 text-amber-600 text-xs font-bold">
+                <AlertCircle className="w-3 h-3" />
+                <span>Awaiting review</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Recent Activity / Quick Actions */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-emerald-600" />
+                Quick Actions
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setActiveTab('vendors')}
+                  className="p-4 bg-gray-50 rounded-xl hover:bg-emerald-50 transition-colors text-left group"
+                >
+                  <Store className="w-6 h-6 text-emerald-600 mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-bold text-gray-900">Review Vendors</p>
+                  <p className="text-xs text-gray-500">Approve or suspend vendor accounts</p>
+                </button>
+                <button 
+                  onClick={() => setActiveTab('orders')}
+                  className="p-4 bg-gray-50 rounded-xl hover:bg-blue-50 transition-colors text-left group"
+                >
+                  <ShoppingBag className="w-6 h-6 text-blue-600 mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-bold text-gray-900">Track Orders</p>
+                  <p className="text-xs text-gray-500">Monitor global order status</p>
+                </button>
+                <button 
+                  onClick={() => setActiveTab('products')}
+                  className="p-4 bg-gray-50 rounded-xl hover:bg-purple-50 transition-colors text-left group"
+                >
+                  <Package className="w-6 h-6 text-purple-600 mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-bold text-gray-900">Manage Catalog</p>
+                  <p className="text-xs text-gray-500">Remove inappropriate listings</p>
+                </button>
+                <button 
+                  onClick={() => setActiveTab('customers')}
+                  className="p-4 bg-gray-50 rounded-xl hover:bg-amber-50 transition-colors text-left group"
+                >
+                  <Users className="w-6 h-6 text-amber-600 mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-bold text-gray-900">User Support</p>
+                  <p className="text-xs text-gray-500">Manage customer accounts</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Pending Approvals Preview */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  Pending Approvals
+                </h2>
+                <button onClick={() => setActiveTab('vendors')} className="text-emerald-600 text-sm font-bold hover:underline">View All</button>
+              </div>
+              <div className="space-y-4">
+                {adminVendors.filter(v => v.status === 'pending').slice(0, 4).map(vendor => (
+                  <div key={vendor.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 font-bold">
+                        {vendor.storeName?.[0] || vendor.name[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 text-sm">{vendor.storeName || vendor.name}</p>
+                        <p className="text-xs text-gray-500">{vendor.email}</p>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              ))}
-              {adminVendors.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                    <AlertCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                    <p>No vendors found on the platform.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => updateVendorStatus(vendor.id, 'active')}
+                        className="p-2 bg-white text-emerald-600 rounded-lg shadow-sm hover:bg-emerald-600 hover:text-white transition-all"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => updateVendorStatus(vendor.id, 'suspended')}
+                        className="p-2 bg-white text-red-600 rounded-lg shadow-sm hover:bg-red-600 hover:text-white transition-all"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {adminVendors.filter(v => v.status === 'pending').length === 0 && (
+                  <div className="text-center py-8 text-gray-500 italic text-sm">
+                    No pending vendor applications.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab !== 'overview' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-xl font-bold text-gray-900 capitalize">{activeTab} Management</h2>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder={`Search ${activeTab}...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-full md:w-64"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            {activeTab === 'vendors' && (
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-bold">Vendor / Store</th>
+                    <th className="px-6 py-4 font-bold">Contact</th>
+                    <th className="px-6 py-4 font-bold">Status</th>
+                    <th className="px-6 py-4 font-bold">Joined</th>
+                    <th className="px-6 py-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredVendors.map(vendor => (
+                    <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900">{vendor.storeName || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">{vendor.name}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{vendor.email}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          vendor.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                          vendor.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {vendor.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(vendor.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          {vendor.status !== 'active' && (
+                            <button onClick={() => updateVendorStatus(vendor.id, 'active')} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Approve">
+                              <CheckCircle className="w-5 h-5" />
+                            </button>
+                          )}
+                          {vendor.status !== 'suspended' && (
+                            <button onClick={() => updateVendorStatus(vendor.id, 'suspended')} className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg" title="Suspend">
+                              <XCircle className="w-5 h-5" />
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteUser(vendor.id, vendor.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete">
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'products' && (
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-bold">Product</th>
+                    <th className="px-6 py-4 font-bold">Vendor</th>
+                    <th className="px-6 py-4 font-bold">Category</th>
+                    <th className="px-6 py-4 font-bold">Price</th>
+                    <th className="px-6 py-4 font-bold">Stock</th>
+                    <th className="px-6 py-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredProducts.map(product => (
+                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <img src={product.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-100" referrerPolicy="no-referrer" />
+                          <div className="font-bold text-gray-900 text-sm">{product.name}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{product.vendorName}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase">{product.category}</span>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-gray-900">{formatPrice(product.price, product.currency)}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{product.stock} units</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => handleDeleteProduct(product.id, product.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Remove Product">
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'orders' && (
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-bold">Order ID</th>
+                    <th className="px-6 py-4 font-bold">Customer</th>
+                    <th className="px-6 py-4 font-bold">Amount</th>
+                    <th className="px-6 py-4 font-bold">Status</th>
+                    <th className="px-6 py-4 font-bold">Date</th>
+                    <th className="px-6 py-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredOrders.map(order => (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 8).toUpperCase()}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{order.customerName}</td>
+                      <td className="px-6 py-4 font-bold text-emerald-600">{formatPrice(order.totalAmount, order.items[0]?.currency)}</td>
+                      <td className="px-6 py-4">
+                        <select 
+                          value={order.status}
+                          onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as OrderStatus)}
+                          className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border-0 focus:ring-2 focus:ring-emerald-500 ${
+                            order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
+                            order.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="confirmed">Confirmed</option>
+                          <option value="preparing">Preparing</option>
+                          <option value="shipped">Shipped</option>
+                          <option value="delivered">Delivered</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="p-2 text-gray-400 hover:text-emerald-600 transition-colors">
+                          <Eye className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'customers' && (
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-bold">Customer Name</th>
+                    <th className="px-6 py-4 font-bold">Email</th>
+                    <th className="px-6 py-4 font-bold">Joined</th>
+                    <th className="px-6 py-4 font-bold">Status</th>
+                    <th className="px-6 py-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredCustomers.map(customer => (
+                    <tr key={customer.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">
+                            {customer.name[0]}
+                          </div>
+                          <div className="font-bold text-gray-900 text-sm">{customer.name}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{customer.email}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(customer.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase">Active</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => handleDeleteUser(customer.id, customer.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete Account">
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {(activeTab === 'vendors' && filteredVendors.length === 0) ||
+             (activeTab === 'products' && filteredProducts.length === 0) ||
+             (activeTab === 'orders' && filteredOrders.length === 0) ||
+             (activeTab === 'customers' && filteredCustomers.length === 0) ? (
+              <div className="px-6 py-20 text-center text-gray-500">
+                <Search className="w-12 h-12 mx-auto mb-4 text-gray-200" />
+                <p className="text-lg font-bold text-gray-400">No results found</p>
+                <p className="text-sm">Try adjusting your search term or filters.</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

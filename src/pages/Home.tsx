@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Search, Filter, ShoppingBag, Store, CheckCircle, MapPin, ChevronRight, Star, Globe2 } from 'lucide-react';
+import { Search, Filter, ShoppingBag, Store, CheckCircle, MapPin, ChevronRight, Star, Globe2, ShieldCheck, Award, HeartHandshake, Truck } from 'lucide-react';
 
 const CATEGORY_ICONS: Record<string, { icon: React.ReactNode, color: string, bg: string }> = {
   'Bakery': { icon: <span className="text-2xl">🥐</span>, color: 'text-amber-600', bg: 'bg-amber-100' },
@@ -88,26 +88,26 @@ export default function Home() {
   return (
     <div className="space-y-12 pb-12">
       {/* Hero Section */}
-      <section className="relative bg-green-900 rounded-3xl overflow-hidden shadow-2xl">
+      <section className="relative bg-emerald-900 rounded-[2rem] overflow-hidden shadow-2xl mx-4 sm:mx-0">
         <div className="absolute inset-0">
           <img 
-            src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1600" 
-            alt="Fresh Groceries" 
-            className="w-full h-full object-cover opacity-20"
+            src="https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?auto=format&fit=crop&q=80&w=1600" 
+            alt="Halal Fresh Market" 
+            className="w-full h-full object-cover opacity-30"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-green-900 via-green-900/80 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-900/90 to-transparent"></div>
         </div>
         
         <div className="relative z-10 p-8 md:p-16 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="flex-1 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-800/50 border border-green-700 text-green-300 text-sm font-medium">
-              <CheckCircle className="w-4 h-4" /> 100% Halal Certified
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-widest">
+              <ShieldCheck className="w-4 h-4" /> 100% Halal Certified
             </div>
-            <h1 className="text-4xl md:text-6xl font-extrabold text-white leading-tight">
-              Premium Halal <br/> <span className="text-green-400">Marketplace</span>
+            <h1 className="text-4xl md:text-6xl font-extrabold text-white leading-tight tracking-tight">
+              Premium Halal <br/> <span className="text-emerald-400">Fresh Marketplace</span>
             </h1>
-            <p className="text-lg text-green-100 max-w-lg leading-relaxed">
+            <p className="text-lg text-emerald-100/80 max-w-lg leading-relaxed font-medium">
               Shop globally sourced, certified halal products. From fresh local meats to international spices, delivered right to your door.
             </p>
             
@@ -121,14 +121,57 @@ export default function Home() {
                 placeholder="Search for halal meats, spices, fresh items..." 
                 value={searchTerm}
                 onChange={handleSearchChange}
-                className="block w-full pl-11 pr-4 py-4 border-0 rounded-xl text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-green-500 sm:text-lg sm:leading-6 shadow-lg"
+                className="block w-full pl-11 pr-4 py-4 border-0 rounded-xl text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-emerald-500 sm:text-lg sm:leading-6 shadow-lg"
               />
-              <button className="absolute inset-y-2 right-2 bg-green-600 text-white px-6 rounded-lg font-medium hover:bg-green-700 transition-colors">
+              <button className="absolute inset-y-2 right-2 bg-emerald-600 text-white px-6 rounded-lg font-medium hover:bg-emerald-700 transition-colors">
                 Search
               </button>
             </div>
           </div>
+          
+          <div className="hidden lg:block flex-shrink-0 w-1/3">
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-3xl shadow-2xl">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                  <Award className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-white font-bold">Quality Guaranteed</p>
+                  <p className="text-emerald-200 text-xs">Verified Halal Standards</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-emerald-100 text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> Fresh Daily Arrivals
+                </div>
+                <div className="flex items-center gap-2 text-emerald-100 text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> Trusted Local Vendors
+                </div>
+                <div className="flex items-center gap-2 text-emerald-100 text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> Secure Halal Logistics
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </section>
+
+      {/* Trust & Values Section */}
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-4 sm:px-0">
+        {[
+          { icon: <ShieldCheck className="w-6 h-6" />, title: 'Halal Certified', desc: 'Every product is strictly verified for Halal compliance.' },
+          { icon: <Award className="w-6 h-6" />, title: 'Premium Quality', desc: 'We source only the freshest and highest grade items.' },
+          { icon: <HeartHandshake className="w-6 h-6" />, title: 'Trusted Vendors', desc: 'Verified local sellers with a commitment to excellence.' },
+          { icon: <Truck className="w-6 h-6" />, title: 'Fresh Delivery', desc: 'Temperature-controlled logistics for ultimate freshness.' },
+        ].map((item, i) => (
+          <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              {item.icon}
+            </div>
+            <h3 className="font-bold text-gray-900 mb-1">{item.title}</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
+          </div>
+        ))}
       </section>
 
       {/* Categories */}

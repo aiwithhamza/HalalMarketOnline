@@ -11,6 +11,7 @@ import path from 'path';
 import fs from 'fs';
 
 const JWT_SECRET = 'super-secret-jwt-key-for-testing';
+const ADMIN_SECRET_KEY = 'HALAL_ADMIN_2026'; // The secret key for admin registration
 const PORT = 3000;
 
 // Initialize Database
@@ -161,6 +162,21 @@ try {
   
   // Ensure all existing vendors are active for testing
   db.prepare("UPDATE users SET status = 'active' WHERE role = 'vendor' AND (status = 'pending' OR status IS NULL)").run();
+
+  // Seed Admin User
+  const adminEmail = 'hamza.mec.edu@gmail.com';
+  const existingAdmin = db.prepare('SELECT * FROM users WHERE email = ?').get(adminEmail);
+  if (!existingAdmin) {
+    const adminId = uuidv4();
+    const adminPassword = bcrypt.hashSync('admin123', 10);
+    const createdAt = new Date().toISOString();
+    db.prepare('INSERT INTO users (id, name, email, password, role, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(adminId, 'Platform Admin', adminEmail, adminPassword, 'admin', 'active', createdAt);
+    console.log(`Admin user created: ${adminEmail} / admin123`);
+  } else if ((existingAdmin as any).role !== 'admin') {
+    db.prepare('UPDATE users SET role = \'admin\' WHERE email = ?').run(adminEmail);
+    console.log(`User ${adminEmail} promoted to admin.`);
+  }
 } catch (error) {
   console.error("Migration error:", error);
 }
@@ -192,8 +208,15 @@ async function startServer() {
 
   // Auth
   app.post('/api/auth/register', (req, res) => {
-    const { name, email, password, role, storeName } = req.body;
+    const { name, email, password, role, storeName, adminSecret } = req.body;
     try {
+      // Check admin secret if role is admin
+      if (role === 'admin') {
+        if (adminSecret !== ADMIN_SECRET_KEY) {
+          return res.status(403).json({ error: 'Invalid admin secret key. You are not authorized to register as an administrator.' });
+        }
+      }
+
       const hashedPassword = bcrypt.hashSync(password, 10);
       const id = uuidv4();
       const createdAt = new Date().toISOString();
@@ -321,6 +344,77 @@ async function startServer() {
     res.json({ success: true });
     io.emit('notifications_updated');
     io.emit('vendors_updated');
+  });
+
+  app.get('/api/admin/products', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const products = db.prepare('SELECT * FROM products').all();
+    res.json(products.map((p: any) => ({
+      ...p,
+      tags: JSON.parse(p.tags || '[]'),
+      availableCountries: JSON.parse(p.availableCountries || '[]'),
+      availableCities: JSON.parse(p.availableCities || '[]'),
+      variationTypes: JSON.parse(p.variationTypes || '[]'),
+      variationCombinations: JSON.parse(p.variationCombinations || '[]')
+    })));
+  });
+
+  app.get('/api/admin/orders', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const orders = db.prepare('SELECT * FROM orders').all();
+    res.json(orders.map((o: any) => ({
+      ...o,
+      items: JSON.parse(o.items || '[]'),
+      shippingDetails: JSON.parse(o.shippingDetails || '{}'),
+      history: JSON.parse(o.history || '[]')
+    })));
+  });
+
+  app.get('/api/admin/customers', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const customers = db.prepare('SELECT id, name, email, status, createdAt FROM users WHERE role = ?').all('customer');
+    res.json(customers);
+  });
+
+  app.delete('/api/admin/users/:id', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+    io.emit('vendors_updated');
+  });
+
+  app.delete('/api/admin/products/:id', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  });
+
+  app.put('/api/admin/orders/:id/status', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const { status, description } = req.body;
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const history = JSON.parse(order.history || '[]');
+    const update = {
+      id: uuidv4(),
+      orderId: order.id,
+      status,
+      description: description || `Order status updated to ${status} by Administrator`,
+      timestamp: new Date().toISOString()
+    };
+    history.push(update);
+
+    db.prepare('UPDATE orders SET status = ?, history = ? WHERE id = ?')
+      .run(status, JSON.stringify(history), req.params.id);
+
+    // Notify customer
+    db.prepare('INSERT INTO notifications (id, userId, title, message, type, orderId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(uuidv4(), order.customerId, 'Order Status Updated', `Your order #${order.id.slice(0, 8)} has been updated to ${status} by Admin.`, 'order_update', order.id, new Date().toISOString());
+
+    res.json({ success: true });
+    io.emit('notifications_updated');
+    io.emit('orders_updated');
   });
 
   // Products
@@ -710,4 +804,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
