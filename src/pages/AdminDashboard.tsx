@@ -4,17 +4,17 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Users, Store, DollarSign, Clock, CheckCircle, XCircle, AlertCircle, 
   Package, ShoppingBag, Search, Filter, Trash2, Eye, ChevronRight, 
-  TrendingUp, Activity, ShieldCheck, User as UserIcon
+  TrendingUp, Activity, ShieldCheck, User as UserIcon, Award
 } from 'lucide-react';
 import { OrderStatus } from '../types';
 
-type AdminTab = 'overview' | 'vendors' | 'products' | 'orders' | 'customers';
+type AdminTab = 'overview' | 'vendors' | 'products' | 'orders' | 'customers' | 'investments' | 'reviews';
 
 export default function AdminDashboard() {
   const { 
-    currentUser, adminStats, adminVendors, adminProducts, adminOrders, adminCustomers,
-    fetchAdminStats, fetchAdminVendors, fetchAdminProducts, fetchAdminOrders, fetchAdminCustomers,
-    updateVendorStatus, deleteUserAdmin, deleteProductAdmin, updateOrderStatusAdmin, formatPrice 
+    currentUser, adminStats, adminVendors, adminProducts, adminOrders, adminCustomers, adminInvestments, adminReviews,
+    fetchAdminStats, fetchAdminVendors, fetchAdminProducts, fetchAdminOrders, fetchAdminCustomers, fetchAdminInvestments, fetchAdminReviews,
+    updateVendorStatus, deleteUserAdmin, deleteProductAdmin, deleteReviewAdmin, updateOrderStatusAdmin, recalculateTopRated, formatPrice 
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -39,6 +39,8 @@ export default function AdminDashboard() {
       fetchAdminProducts();
       fetchAdminOrders();
       fetchAdminCustomers();
+      fetchAdminInvestments();
+      fetchAdminReviews();
     }
   }, [currentUser]);
 
@@ -104,6 +106,15 @@ export default function AdminDashboard() {
     c.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredReviews = adminReviews.filter(r => 
+    r.comment.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    r.userName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredOpportunities = adminInvestments.opportunities.filter(o => 
+    o.productName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Success Message Banner */}
@@ -151,15 +162,15 @@ export default function AdminDashboard() {
           <p className="text-gray-500 mt-1">Global platform management and oversight.</p>
         </div>
         
-        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
-          {(['overview', 'vendors', 'products', 'orders', 'customers'] as AdminTab[]).map((tab) => (
+        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+          {(['overview', 'vendors', 'products', 'orders', 'customers', 'investments', 'reviews'] as AdminTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => {
                 setActiveTab(tab);
                 setSearchTerm('');
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all capitalize ${
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all capitalize whitespace-nowrap ${
                 activeTab === tab 
                   ? 'bg-emerald-600 text-white shadow-md' 
                   : 'text-gray-500 hover:bg-gray-50'
@@ -228,20 +239,41 @@ export default function AdminDashboard() {
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden group">
               <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
-                <Clock className="w-24 h-24" />
+                <ShieldCheck className="w-24 h-24" />
               </div>
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-amber-100 rounded-xl text-amber-600">
-                  <Clock className="w-6 h-6" />
+                <div className="p-3 bg-indigo-100 rounded-xl text-indigo-600">
+                  <ShieldCheck className="w-6 h-6" />
                 </div>
-                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pending</span>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Platform Commission</span>
               </div>
-              <p className="text-3xl font-black text-gray-900">{adminStats?.pendingVendors || 0}</p>
-              <div className="mt-4 flex items-center gap-1 text-amber-600 text-xs font-bold">
-                <AlertCircle className="w-3 h-3" />
-                <span>Awaiting review</span>
+              <p className="text-3xl font-black text-gray-900">{formatPrice(adminStats?.totalCommission || 0)}</p>
+              <div className="mt-4 flex items-center gap-1 text-indigo-600 text-xs font-bold">
+                <Activity className="w-3 h-3" />
+                <span>5% service fee applied</span>
               </div>
             </div>
+          </div>
+
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Top-Rated Vendor Logic</h3>
+                <p className="text-sm text-gray-600">Recalculate badges based on rating (4.0+), orders (5+), and completion rate (80%+).</p>
+              </div>
+            </div>
+            <button 
+              onClick={async () => {
+                await recalculateTopRated();
+                showSuccess('Vendor badges recalculated successfully!');
+              }}
+              className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95"
+            >
+              Recalculate Now
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -526,6 +558,100 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button onClick={() => handleDeleteUser(customer.id, customer.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete Account">
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'investments' && (
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-bold">Opportunity</th>
+                    <th className="px-6 py-4 font-bold">Goal</th>
+                    <th className="px-6 py-4 font-bold">Raised</th>
+                    <th className="px-6 py-4 font-bold">Progress</th>
+                    <th className="px-6 py-4 font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredOpportunities.map(opp => (
+                    <tr key={opp.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900 text-sm">{opp.productName}</div>
+                        <div className="text-xs text-gray-500">ID: {opp.id.slice(0, 8)}</div>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-gray-900">{formatPrice(opp.fundingGoal)}</td>
+                      <td className="px-6 py-4 font-bold text-emerald-600">{formatPrice(opp.currentFunding)}</td>
+                      <td className="px-6 py-4">
+                        <div className="w-full bg-gray-100 rounded-full h-2 max-w-[100px]">
+                          <div 
+                            className="bg-emerald-600 h-2 rounded-full" 
+                            style={{ width: `${Math.min(100, (opp.currentFunding / opp.fundingGoal) * 100)}%` }}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                          opp.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {opp.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === 'reviews' && (
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-bold">User</th>
+                    <th className="px-6 py-4 font-bold">Rating</th>
+                    <th className="px-6 py-4 font-bold">Comment</th>
+                    <th className="px-6 py-4 font-bold">Date</th>
+                    <th className="px-6 py-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredReviews.map(review => (
+                    <tr key={review.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900 text-sm">{review.userName}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex text-amber-400">
+                          {[...Array(5)].map((_, i) => (
+                            <Activity key={i} className={`w-3 h-3 ${i < review.rating ? 'fill-current' : 'text-gray-200'}`} />
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">{review.comment}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(review.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button 
+                          onClick={() => {
+                            setConfirmModal({
+                              isOpen: true,
+                              title: 'Delete Review?',
+                              message: 'Are you sure you want to remove this review? This is usually done for moderation purposes.',
+                              onConfirm: async () => {
+                                await deleteReviewAdmin(review.id);
+                                showSuccess('Review removed successfully.');
+                                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                              }
+                            });
+                          }}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        >
                           <Trash2 className="w-5 h-5" />
                         </button>
                       </td>

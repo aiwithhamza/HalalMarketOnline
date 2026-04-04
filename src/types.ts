@@ -58,7 +58,48 @@ export interface User {
   wishlist?: string[]; // Array of product IDs
   rating?: number;
   reviewCount?: number;
+  isTopRated?: boolean;
   createdAt: string;
+}
+
+export interface Subscription {
+  id: string;
+  customerId: string;
+  productId: string;
+  productName: string;
+  vendorId: string;
+  vendorName: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  quantity: number;
+  price: number;
+  currency: string;
+  status: 'active' | 'paused' | 'cancelled';
+  nextDelivery: string;
+  createdAt: string;
+}
+
+export interface GroupPurchase {
+  id: string;
+  productId: string;
+  productName: string;
+  vendorId: string;
+  vendorName: string;
+  targetMembers: number;
+  currentMembers: number;
+  price: number;
+  currency: string;
+  expiresAt: string;
+  status: 'open' | 'completed' | 'expired';
+  createdAt: string;
+  members?: GroupMember[];
+}
+
+export interface GroupMember {
+  id: string;
+  groupPurchaseId: string;
+  customerId: string;
+  customerName: string;
+  joinedAt: string;
 }
 
 export interface VariationType {
@@ -75,6 +116,68 @@ export interface VariationCombination {
   weight?: string;
   attributes?: Record<string, string>;
 }
+
+export interface InvestmentTier {
+  id: string;
+  name: string;
+  amount: number;
+  returnPct: number;
+  estimatedEarnings: number;
+}
+
+export interface InvestmentOpportunity {
+  id: string;
+  productId: string;
+  productName: string;
+  vendorId: string;
+  fundingGoal: number;
+  currentFunding: number;
+  totalUnits: number;
+  profitSharingPct: number;
+  status: 'pending' | 'active' | 'completed';
+  tiers: InvestmentTier[];
+  riskLevel: 'low' | 'medium' | 'high';
+  createdAt: string;
+}
+
+export interface Investment {
+  id: string;
+  opportunityId: string;
+  productId: string;
+  productName: string;
+  investorId: string;
+  tierId: string;
+  tierName: string;
+  amount: number;
+  expectedReturnPct: number;
+  earnedSoFar: number;
+  status: 'active' | 'completed';
+  createdAt: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'investment' | 'earning' | 'withdrawal' | 'deposit';
+  description: string;
+  createdAt: string;
+}
+
+export interface InvestorWallet {
+  userId: string;
+  balance: number;
+  totalEarned: number;
+  transactions: WalletTransaction[];
+}
+
+export interface SalesStat {
+  month: string;
+  unitsSold: number;
+  revenue: number;
+}
+
+export type AvailabilityScope = 'local' | 'country' | 'global';
 
 export interface Product {
   id: string;
@@ -93,8 +196,16 @@ export interface Product {
   availableCities?: string[]; // For Fresh Items
   variationTypes?: VariationType[];
   variationCombinations?: VariationCombination[];
+  originCountry?: string;
+  freshness?: 'fresh' | 'frozen' | 'organic';
+  groupPrice?: number;
+  targetMembers?: number;
   rating?: number;
   reviewCount?: number;
+  investmentOpportunity?: InvestmentOpportunity;
+  salesStats?: SalesStat[];
+  availabilityScope?: AvailabilityScope;
+  availabilityDescription?: string;
 }
 
 export interface CartItem {

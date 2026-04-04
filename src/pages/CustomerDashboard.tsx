@@ -4,19 +4,24 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Package, Clock, CheckCircle, Truck, MapPin, 
   CreditCard, Banknote, User as UserIcon, Heart, 
-  Settings, ShoppingBag, ChevronRight, Star, MessageSquare, X
+  Settings, ShoppingBag, ChevronRight, Star, MessageSquare, X, Users
 } from 'lucide-react';
 import { OrderStatus } from '../types';
+import { COUNTRIES } from '../constants';
 import ChatList from '../components/chat/ChatList';
 import ChatWindow from '../components/chat/ChatWindow';
 
 export default function CustomerDashboard() {
-  const { currentUser, orders, products, formatPrice, updateUserProfile, toggleWishlist, conversations, sendMessage } = useAppContext();
+  const { 
+    currentUser, orders, products, formatPrice, updateUserProfile, 
+    toggleWishlist, conversations, sendMessage, userLocation, setUserLocation 
+  } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'profile' | 'messages'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'profile' | 'messages' | 'subscriptions' | 'groups'>('orders');
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { subscriptions, groupPurchases, updateSubscriptionStatus } = useAppContext();
 
   useEffect(() => {
     const state = location.state as { openChatWith?: string, activeTab?: string };
@@ -127,6 +132,20 @@ export default function CustomerDashboard() {
             My Orders
           </button>
           <button 
+            onClick={() => setActiveTab('subscriptions')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'subscriptions' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Clock className="w-5 h-5" />
+            Subscriptions
+          </button>
+          <button 
+            onClick={() => setActiveTab('groups')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'groups' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Users className="w-5 h-5" />
+            Group Buys
+          </button>
+          <button 
             onClick={() => setActiveTab('wishlist')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'wishlist' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'text-gray-600 hover:bg-gray-50'}`}
           >
@@ -156,6 +175,174 @@ export default function CustomerDashboard() {
 
         {/* Main Content */}
         <div className="flex-grow">
+          {activeTab === 'subscriptions' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center mb-2">
+                <h1 className="text-2xl font-bold text-gray-900">My Subscriptions</h1>
+                <span className="text-sm text-gray-500">{subscriptions.length} active subscriptions</span>
+              </div>
+
+              {subscriptions.length === 0 ? (
+                <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
+                  <Clock className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">No subscriptions</h2>
+                  <p className="text-gray-500 mb-6">Subscribe to your favorite products for regular deliveries!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {subscriptions.map(sub => (
+                    <div key={sub.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                          <img src={sub.productImageUrl} alt={sub.productName} className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900">{sub.productName}</h3>
+                          <p className="text-sm text-gray-500 capitalize">{sub.frequency} delivery • Qty: {sub.quantity}</p>
+                          <p className="text-xs text-emerald-600 font-bold mt-1">Next Delivery: {new Date(sub.nextDelivery).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Price</p>
+                          <p className="font-extrabold text-gray-900">{formatPrice(sub.price * sub.quantity, sub.currency)}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          {sub.status === 'active' ? (
+                            <button 
+                              onClick={() => updateSubscriptionStatus(sub.id, 'paused')}
+                              className="px-4 py-2 bg-amber-50 text-amber-600 rounded-lg text-sm font-bold hover:bg-amber-100 transition-colors"
+                            >
+                              Pause
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => updateSubscriptionStatus(sub.id, 'active')}
+                              className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-bold hover:bg-emerald-100 transition-colors"
+                            >
+                              Resume
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => updateSubscriptionStatus(sub.id, 'cancelled')}
+                            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'groups' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center mb-2">
+                <h1 className="text-2xl font-bold text-gray-900">Group Purchases</h1>
+                <span className="text-sm text-gray-500">{groupPurchases.filter(g => g.members?.some((m: any) => m.customerId === currentUser.id)).length} groups joined</span>
+              </div>
+
+              {groupPurchases.filter(g => g.members?.some((m: any) => m.customerId === currentUser.id)).length === 0 ? (
+                <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
+                  <Users className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">No joined groups</h2>
+                  <p className="text-gray-500 mb-6">Join group purchases to save more with friends!</p>
+                  <button onClick={() => navigate('/')} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors">
+                    Find Group Deals
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {groupPurchases.filter(g => g.members?.some((m: any) => m.customerId === currentUser.id)).map(group => {
+                    const product = products.find(p => p.id === group.productId);
+                    return (
+                      <div key={group.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 hover:border-emerald-100 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                            <img src={product?.imageUrl} alt={group.productName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </div>
+                          <div className="flex-grow">
+                            <h3 className="font-bold text-gray-900 line-clamp-1">{group.productName}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                group.status === 'open' ? 'bg-emerald-100 text-emerald-700' : 
+                                group.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                                {group.status}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">#{group.id.slice(0, 8)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Group Progress</span>
+                            <span className="text-xs font-bold text-emerald-700">{group.currentMembers}/{group.targetMembers} Joined</span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-3">
+                            <div 
+                              className="h-full bg-emerald-600 transition-all duration-500" 
+                              style={{ width: `${(group.currentMembers / group.targetMembers) * 100}%` }}
+                            ></div>
+                          </div>
+                          
+                          {/* Member Avatars */}
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {group.members?.map((member: any) => (
+                              <div key={member.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 overflow-hidden" title={member.customerName}>
+                                {member.customerProfileImage ? (
+                                  <img src={member.customerProfileImage} alt={member.customerName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
+                                    {member.customerName.charAt(0)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {Array.from({ length: Math.max(0, group.targetMembers - group.currentMembers) }).map((_, i) => (
+                              <div key={`empty-${i}`} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-50 border border-dashed border-gray-300 flex items-center justify-center text-gray-300">
+                                <Users className="w-3 h-3" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2">
+                          <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Your Price</p>
+                            <p className="text-xl font-black text-emerald-600">{formatPrice(group.price, group.currency)}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/product/${group.productId}`);
+                                alert('Invite link copied!');
+                              }}
+                              className="p-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                              title="Invite Friends"
+                            >
+                              <Users className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => navigate(`/product/${group.productId}`)}
+                              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                            >
+                              View Product
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'orders' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center mb-2">
@@ -428,6 +615,42 @@ export default function CustomerDashboard() {
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all font-medium" 
                     />
                   </div>
+
+                  {/* Location Settings */}
+                  <div className="pt-6 border-t border-gray-100">
+                    <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-emerald-600" /> Shopping Location
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Country</label>
+                        <select 
+                          value={userLocation.country} 
+                          onChange={(e) => setUserLocation({ ...userLocation, country: e.target.value })} 
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all font-medium"
+                        >
+                          <option value="">Select Country</option>
+                          {COUNTRIES.map(country => (
+                            <option key={country} value={country}>{country}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">City</label>
+                        <input 
+                          type="text" 
+                          value={userLocation.city} 
+                          onChange={(e) => setUserLocation({ ...userLocation, city: e.target.value })} 
+                          placeholder="e.g. London"
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all font-medium" 
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      This helps us show you products available in your area.
+                    </p>
+                  </div>
+
                   <div className="pt-4">
                     <button type="submit" className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-100">
                       Save Changes

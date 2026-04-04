@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { User, Product, CartItem, Order, OrderStatus, ShippingDetails, PaymentMethod, SUPPORTED_CURRENCIES, Notification, ChatMessage, ChatConversation, Review } from '../types';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import { User, Product, CartItem, Order, OrderStatus, ShippingDetails, PaymentMethod, SUPPORTED_CURRENCIES, Notification, ChatMessage, ChatConversation, Review, Subscription, GroupPurchase, InvestmentOpportunity, Investment, InvestorWallet } from '../types';
 import { io, Socket } from 'socket.io-client';
 
 const EXCHANGE_RATES: Record<string, number> = {
@@ -38,6 +38,7 @@ interface AppContextType {
   addProduct: (product: Omit<Product, 'id' | 'vendorId' | 'vendorName'>) => Promise<void>;
   updateProduct: (product: Product) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
+  fetchProducts: (filters?: any) => Promise<void>;
   cart: CartItem[];
   addToCart: (product: Product, quantity: number, selectedVariations?: Record<string, string>) => void;
   removeFromCart: (productId: string, selectedVariations?: Record<string, string>) => void;
@@ -54,15 +55,21 @@ interface AppContextType {
   adminProducts: Product[];
   adminOrders: Order[];
   adminCustomers: User[];
+  adminInvestments: { opportunities: InvestmentOpportunity[], investments: Investment[] };
+  adminReviews: Review[];
   fetchAdminStats: () => Promise<void>;
   fetchAdminVendors: () => Promise<void>;
   fetchAdminProducts: () => Promise<void>;
   fetchAdminOrders: () => Promise<void>;
   fetchAdminCustomers: () => Promise<void>;
+  fetchAdminInvestments: () => Promise<void>;
+  fetchAdminReviews: () => Promise<void>;
   updateVendorStatus: (vendorId: string, status: string) => Promise<void>;
   deleteUserAdmin: (id: string) => Promise<void>;
   deleteProductAdmin: (id: string) => Promise<void>;
+  deleteReviewAdmin: (id: string) => Promise<void>;
   updateOrderStatusAdmin: (orderId: string, status: OrderStatus, description?: string) => Promise<void>;
+  recalculateTopRated: () => Promise<void>;
   customers: User[];
   isAuthReady: boolean;
   notifications: Notification[];
@@ -77,6 +84,28 @@ interface AppContextType {
   fetchProductReviews: (productId: string) => Promise<Review[]>;
   fetchVendorReviews: (vendorId: string) => Promise<Review[]>;
   submitReview: (review: { productId?: string, vendorId?: string, rating: number, comment: string }) => Promise<void>;
+  groupPurchases: GroupPurchase[];
+  subscriptions: Subscription[];
+  fetchGroupPurchases: () => Promise<void>;
+  fetchSubscriptions: () => Promise<void>;
+  createGroupPurchase: (productId: string, targetMembers: number) => Promise<void>;
+  joinGroupPurchase: (groupId: string) => Promise<void>;
+  createSubscription: (productId: string, frequency: 'daily' | 'weekly' | 'monthly', quantity: number) => Promise<void>;
+  updateSubscriptionStatus: (id: string, status: 'active' | 'paused' | 'cancelled') => Promise<void>;
+  investmentOpportunities: InvestmentOpportunity[];
+  myInvestments: Investment[];
+  vendorInvestments: Investment[];
+  investorWallet: InvestorWallet | null;
+  loading: boolean;
+  fetchInvestmentOpportunities: () => Promise<void>;
+  createInvestmentOpportunity: (data: any) => Promise<void>;
+  invest: (opportunityId: string, tierId: string) => Promise<void>;
+  fetchMyInvestments: () => Promise<void>;
+  fetchVendorInvestments: () => Promise<void>;
+  fetchInvestorWallet: () => Promise<void>;
+  withdrawEarnings: (amount: number) => Promise<void>;
+  userLocation: { country: string, city: string };
+  setUserLocation: (location: { country: string, city: string }) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -88,6 +117,55 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   });
   const [token, setToken] = useState<string | null>(localStorage.getItem('auth_token'));
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [groupPurchases, setGroupPurchases] = useState<GroupPurchase[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [investmentOpportunities, setInvestmentOpportunities] = useState<InvestmentOpportunity[]>([]);
+  const [myInvestments, setMyInvestments] = useState<Investment[]>([]);
+  const [vendorInvestments, setVendorInvestments] = useState<Investment[]>([]);
+  const [investorWallet, setInvestorWallet] = useState<InvestorWallet | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ country: string, city: string }>(() => {
+    const saved = localStorage.getItem('userLocation');
+    return saved ? JSON.parse(saved) : { country: '', city: '' };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('userLocation', JSON.stringify(userLocation));
+  }, [userLocation]);
+
+  useEffect(() => {
+    const detectLocation = async () => {
+      if (userLocation.country) return;
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        if (data.country_name) {
+          setUserLocation({ country: data.country_name, city: data.city || '' });
+        }
+      } catch (e) {
+        console.error('Failed to detect location:', e);
+      }
+    };
+    detectLocation();
+  }, []);
+
+  useEffect(() => {
+    const detectCurrency = async () => {
+      if (localStorage.getItem('preferredCurrency')) return;
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        if (data.currency) {
+          setPreferredCurrency(data.currency);
+        }
+      } catch (e) {
+        // Fallback to browser locale
+        const browserCurrency = new Intl.NumberFormat().resolvedOptions().currency;
+        if (browserCurrency) setPreferredCurrency(browserCurrency);
+      }
+    };
+    detectCurrency();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('preferredCurrency', preferredCurrency);
@@ -125,6 +203,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [adminCustomers, setAdminCustomers] = useState<User[]>([]);
+  const [adminInvestments, setAdminInvestments] = useState<{ opportunities: InvestmentOpportunity[], investments: Investment[] }>({ opportunities: [], investments: [] });
+  const [adminReviews, setAdminReviews] = useState<Review[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
   const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
@@ -150,14 +230,32 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     throw new Error(`Server returned non-JSON response: ${text.slice(0, 100)}...`);
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async (filters: any = {}) => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/products');
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+      
+      // Add location parameters if not already present in filters
+      if (!params.has('userCountry') && userLocation.country) {
+        params.append('userCountry', userLocation.country);
+      }
+      if (!params.has('userCity') && userLocation.city) {
+        params.append('userCity', userLocation.city);
+      }
+
+      const res = await fetch(`/api/products?${params.toString()}`);
       if (res.ok) setProducts(await handleResponse(res));
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [userLocation]);
 
   const fetchVendors = async () => {
     try {
@@ -255,6 +353,59 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const fetchAdminInvestments = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/investments', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminInvestments(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchAdminReviews = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/reviews', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setAdminReviews(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteReviewAdmin = async (id: string) => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch(`/api/admin/reviews/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) fetchAdminReviews();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const recalculateTopRated = async () => {
+    if (!token || currentUser?.role !== 'admin') return;
+    try {
+      const res = await fetch('/api/admin/recalculate-top-rated', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchAdminVendors();
+        fetchAdminStats();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       if (token) {
@@ -278,13 +429,217 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
   }, [token]);
 
+  const fetchSubscriptions = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/subscriptions', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setSubscriptions(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchGroupPurchases = async () => {
+    try {
+      const res = await fetch('/api/group-purchases');
+      if (res.ok) setGroupPurchases(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchInvestmentOpportunities = async () => {
+    try {
+      const res = await fetch('/api/investments/opportunities');
+      if (res.ok) setInvestmentOpportunities(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchMyInvestments = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/investments/my-investments', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setMyInvestments(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchVendorInvestments = async () => {
+    if (!token || currentUser?.role !== 'vendor') return;
+    try {
+      const res = await fetch('/api/vendor/investments', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setVendorInvestments(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchInvestorWallet = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/investments/wallet', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setInvestorWallet(await handleResponse(res));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const createInvestmentOpportunity = async (data: any) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/investments/opportunities', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        await fetchInvestmentOpportunities();
+      } else {
+        const errorData = await handleResponse(res);
+        throw new Error(errorData.error || 'Failed to create investment opportunity');
+      }
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  };
+
+  const invest = async (opportunityId: string, tierId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/investments/invest', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ opportunityId, tierId })
+      });
+      if (res.ok) {
+        fetchMyInvestments();
+        fetchInvestorWallet();
+        fetchInvestmentOpportunities();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const withdrawEarnings = async (amount: number) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/investments/withdraw', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ amount })
+      });
+      if (res.ok) fetchInvestorWallet();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const createSubscription = async (productId: string, frequency: 'daily' | 'weekly' | 'monthly', quantity: number) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ productId, frequency, quantity })
+      });
+      if (res.ok) fetchSubscriptions();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateSubscriptionStatus = async (id: string, status: 'active' | 'paused' | 'cancelled') => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/subscriptions/${id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) fetchSubscriptions();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const createGroupPurchase = async (productId: string, targetMembers: number, durationHours: number = 24) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/group-purchases', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ productId, targetMembers, durationHours })
+      });
+      if (res.ok) fetchGroupPurchases();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const joinGroupPurchase = async (groupId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/group-purchases/${groupId}/join`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchGroupPurchases();
+        fetchOrders(); // Refresh orders in case group completed
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to join group purchase');
+      }
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  };
+
   useEffect(() => {
     fetchProducts();
     fetchVendors();
+    fetchGroupPurchases();
+    fetchInvestmentOpportunities();
     if (token) {
       fetchOrders();
       fetchNotifications();
       fetchConversations();
+      fetchSubscriptions();
+      fetchMyInvestments();
+      fetchVendorInvestments();
+      fetchInvestorWallet();
       if (currentUser?.role === 'admin') {
         fetchAdminStats();
         fetchAdminVendors();
@@ -303,6 +658,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     newSocket.on('products_updated', fetchProducts);
     newSocket.on('vendors_updated', fetchVendors);
+    newSocket.on('group_purchases_updated', fetchGroupPurchases);
+    newSocket.on('investments_updated', () => {
+      fetchInvestmentOpportunities();
+      if (token) {
+        fetchMyInvestments();
+        fetchVendorInvestments();
+      }
+    });
+    newSocket.on('wallet_updated', () => {
+      if (token) fetchInvestorWallet();
+    });
     newSocket.on('orders_updated', () => {
       if (token) fetchOrders();
     });
@@ -398,6 +764,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addToCart = (product: Product, quantity: number, selectedVariations?: Record<string, string>) => {
+    if (currentUser?.id === product.vendorId) {
+      alert('You cannot purchase your own product.');
+      return;
+    }
     setCart(prev => {
       const existingItemIndex = prev.findIndex(item => 
         item.product.id === product.id && 
@@ -734,6 +1104,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       addProduct,
       updateProduct,
       deleteProduct,
+      fetchProducts,
       cart,
       addToCart,
       removeFromCart,
@@ -750,15 +1121,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       adminProducts,
       adminOrders,
       adminCustomers,
+      adminInvestments,
+      adminReviews,
       fetchAdminStats,
       fetchAdminVendors,
       fetchAdminProducts,
       fetchAdminOrders,
       fetchAdminCustomers,
+      fetchAdminInvestments,
+      fetchAdminReviews,
       updateVendorStatus,
       deleteUserAdmin,
       deleteProductAdmin,
+      deleteReviewAdmin,
       updateOrderStatusAdmin,
+      recalculateTopRated,
       customers,
       isAuthReady,
       notifications,
@@ -772,7 +1149,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       sendMessage,
       fetchProductReviews,
       fetchVendorReviews,
-      submitReview
+      submitReview,
+      groupPurchases,
+      subscriptions,
+      fetchGroupPurchases,
+      fetchSubscriptions,
+      createGroupPurchase,
+      joinGroupPurchase,
+      createSubscription,
+      updateSubscriptionStatus,
+      investmentOpportunities,
+      myInvestments,
+      investorWallet,
+      loading,
+      fetchInvestmentOpportunities,
+      createInvestmentOpportunity,
+      invest,
+      fetchMyInvestments,
+      fetchVendorInvestments,
+      fetchInvestorWallet,
+      withdrawEarnings,
+      vendorInvestments,
+      userLocation,
+      setUserLocation
     }}>
       {children}
     </AppContext.Provider>

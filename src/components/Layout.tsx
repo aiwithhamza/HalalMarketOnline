@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Store, User as UserIcon, LogOut, Menu, X, Package, Search, MapPin, ChevronDown, Globe, Bell, MessageSquare, BarChart2 } from 'lucide-react';
+import { ShoppingCart, Store, User as UserIcon, LogOut, Menu, X, Package, Search, MapPin, ChevronDown, Globe, Bell, MessageSquare, BarChart2, TrendingUp } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { SUPPORTED_CURRENCIES } from '../types';
 
@@ -91,6 +91,7 @@ export default function Layout() {
                       <p className="font-bold">Your Account</p>
                     </div>
                     <Link to="/customer" className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700">Your Orders</Link>
+                    <Link to="/investor" className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700 font-bold text-emerald-600">Investor Dashboard</Link>
                     <Link to="/customer" state={{ activeTab: 'messages' }} className="block px-4 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700 flex justify-between items-center">
                       Messages
                       {unreadMessagesCount > 0 && (
@@ -212,6 +213,9 @@ export default function Layout() {
               </div>
               
               <Link to="/vendors" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm font-bold text-green-400 flex-shrink-0">Our Vendors</Link>
+              <Link to="/investor" state={{ activeTab: 'opportunities' }} className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0 text-amber-400 font-bold flex items-center gap-1">
+                <TrendingUp className="w-4 h-4" /> Investment Opportunities
+              </Link>
               <Link to="/" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0">Today's Deals</Link>
               <Link to="/" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0 hidden sm:block">Halal Fresh</Link>
               <Link to="/help" className="hover:outline hover:outline-1 hover:outline-white p-1 rounded-sm flex-shrink-0 hidden md:block">Customer Service</Link>
@@ -336,6 +340,7 @@ export default function Layout() {
                   ) : (
                     <Link to="/customer" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-white hover:text-green-400">Your Orders</Link>
                   )}
+                  <Link to="/investor" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-green-400 font-bold">Investor Dashboard</Link>
                   <div className="border-t border-emerald-600 pt-4 mt-2">
                     <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="flex items-center gap-2 text-emerald-200 hover:text-white">
                       <LogOut className="w-4 h-4" /> Sign Out

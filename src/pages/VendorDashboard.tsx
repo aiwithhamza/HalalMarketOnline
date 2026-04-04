@@ -5,9 +5,11 @@ import {
   Plus, Edit2, Trash2, Package, DollarSign, ShoppingBag, 
   Clock, CheckCircle, Truck, MapPin, X, TrendingUp, 
   AlertTriangle, BarChart2, LayoutDashboard, MessageSquare,
-  ChevronDown, ChevronUp, Image as ImageIcon, Settings
+  ChevronDown, ChevronUp, Image as ImageIcon, Settings, Award, Users,
+  ChevronRight
 } from 'lucide-react';
 import { Product, OrderStatus, VariationType, VariationCombination, SUPPORTED_CURRENCIES } from '../types';
+import { COUNTRIES, FRESHNESS_OPTIONS, CATEGORIES } from '../constants';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
@@ -15,11 +17,29 @@ import ChatList from '../components/chat/ChatList';
 import ChatWindow from '../components/chat/ChatWindow';
 
 export default function VendorDashboard() {
-  const { currentUser, products, addProduct, updateProduct, deleteProduct, orders, updateOrderStatus, updateVendorProfile, formatPrice, convertPrice, conversations } = useAppContext();
+  const { 
+    currentUser, products, addProduct, updateProduct, deleteProduct, 
+    orders, updateOrderStatus, updateVendorProfile, formatPrice, 
+    convertPrice, conversations, subscriptions, groupPurchases, 
+    createInvestmentOpportunity, investmentOpportunities, vendorInvestments 
+  } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'profile' | 'messages'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'profile' | 'messages' | 'subscriptions' | 'groups' | 'investments'>('dashboard');
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
+  const [isAddingInvestment, setIsAddingInvestment] = useState(false);
+  const [investmentFormData, setInvestmentFormData] = useState({
+    productId: '',
+    fundingGoal: '',
+    totalUnits: '',
+    profitSharingPct: '',
+    riskLevel: 'medium',
+    tiers: [
+      { name: 'Basic', amount: '', returnPct: '', estimatedEarnings: '' },
+      { name: 'Standard', amount: '', returnPct: '', estimatedEarnings: '' },
+      { name: 'Premium', amount: '', returnPct: '', estimatedEarnings: '' }
+    ]
+  });
 
   useEffect(() => {
     const state = location.state as { activeTab?: string, openChatWith?: string };
@@ -48,6 +68,12 @@ export default function VendorDashboard() {
     tags: '',
     availableCountries: '',
     availableCities: '',
+    groupPrice: '',
+    targetMembers: '',
+    originCountry: 'United Arab Emirates',
+    freshness: 'Fresh',
+    availabilityScope: 'global',
+    availabilityDescription: '',
   });
   
   const [variationTypes, setVariationTypes] = useState<VariationType[]>([]);
@@ -124,7 +150,7 @@ export default function VendorDashboard() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-green-100 rounded-xl text-green-600">
-              <TrendingUp className="w-6 h-6" />
+              <DollarSign className="w-6 h-6" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Revenue</p>
@@ -147,12 +173,12 @@ export default function VendorDashboard() {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-100 rounded-xl text-yellow-600">
-              <Clock className="w-6 h-6" />
+            <div className="p-3 bg-purple-100 rounded-xl text-purple-600">
+              <TrendingUp className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Pending Orders</p>
-              <p className="text-2xl font-bold text-gray-900">{pendingOrders}</p>
+              <p className="text-sm text-gray-500">Capital Raised</p>
+              <p className="text-2xl font-bold text-gray-900">{formatPrice(vendorInvestments.reduce((sum, inv) => sum + inv.amount, 0))}</p>
             </div>
           </div>
         </div>
@@ -235,41 +261,82 @@ export default function VendorDashboard() {
         </div>
       </div>
 
-      {/* Recent Orders */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-gray-900">Recent Orders</h3>
-          <button onClick={() => setActiveTab('orders')} className="text-sm text-green-600 font-medium hover:underline">View All</button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Order ID</th>
-                <th className="px-6 py-4 font-semibold">Customer</th>
-                <th className="px-6 py-4 font-semibold">Amount</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {myOrders.slice(0, 5).map(order => (
-                <tr key={order.id}>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">#{order.id.slice(0, 8).toUpperCase()}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{order.customerName}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-900">{formatPrice(order.totalAmount, order.currency)}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
-                      order.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
-                      {order.status}
-                    </span>
-                  </td>
+      {/* Recent Orders & Investments */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Orders */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h3 className="text-lg font-bold text-gray-900">Recent Orders</h3>
+            <button onClick={() => setActiveTab('orders')} className="text-sm text-green-600 font-medium hover:underline">View All</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                <tr>
+                  <th className="px-6 py-4">Order ID</th>
+                  <th className="px-6 py-4">Customer</th>
+                  <th className="px-6 py-4">Amount</th>
+                  <th className="px-6 py-4">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {myOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-400 text-sm">No orders yet</td>
+                  </tr>
+                ) : (
+                  myOrders.slice(0, 5).map(order => (
+                    <tr key={order.id}>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">#{order.id.slice(0, 8).toUpperCase()}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{order.customerName}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{formatPrice(order.totalAmount, order.currency)}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${getStatusColor(order.status)}`}>
+                          {order.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Recent Investments */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h3 className="text-lg font-bold text-gray-900">Recent Investments</h3>
+            <button onClick={() => setActiveTab('investments')} className="text-sm text-green-600 font-medium hover:underline">View All</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                <tr>
+                  <th className="px-6 py-4">Investor</th>
+                  <th className="px-6 py-4">Product</th>
+                  <th className="px-6 py-4">Amount</th>
+                  <th className="px-6 py-4">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {vendorInvestments.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-400 text-sm">No investments yet</td>
+                  </tr>
+                ) : (
+                  vendorInvestments.slice(0, 5).map(investment => (
+                    <tr key={investment.id}>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">Investor #{investment.investorId.slice(0, 8).toUpperCase()}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{investment.productName}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{formatPrice(investment.amount)}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{new Date(investment.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -373,7 +440,13 @@ export default function VendorDashboard() {
       availableCities: formData.availableCities.split(',').map(city => city.trim()).filter(city => city !== ''),
       variationTypes: variationTypes.filter(v => v.name && v.options.length > 0),
       variationCombinations: variationCombinations,
-      isHalalCertified: true
+      isHalalCertified: true,
+      groupPrice: formData.groupPrice ? parseFloat(formData.groupPrice) : undefined,
+      targetMembers: formData.targetMembers ? parseInt(formData.targetMembers, 10) : undefined,
+      originCountry: formData.originCountry,
+      freshness: formData.freshness,
+      availabilityScope: formData.availabilityScope as any,
+      availabilityDescription: formData.availabilityDescription,
     };
 
     try {
@@ -395,7 +468,24 @@ export default function VendorDashboard() {
   const resetForm = () => {
     setIsAddingProduct(false);
     setEditingProduct(null);
-    setFormData({ name: '', description: '', price: '', currency: 'USD', category: 'Fresh Items', imageUrl: '', stock: '', tags: '', availableCountries: '', availableCities: '' });
+    setFormData({ 
+      name: '', 
+      description: '', 
+      price: '', 
+      currency: 'USD', 
+      category: '', 
+      imageUrl: '', 
+      stock: '', 
+      tags: '', 
+      availableCountries: '', 
+      availableCities: '', 
+      groupPrice: '', 
+      targetMembers: '', 
+      originCountry: '',
+      freshness: '',
+      availabilityScope: 'global', 
+      availabilityDescription: '' 
+    });
     setVariationTypes([]);
     setVariationCombinations([]);
     setShowCombinations(false);
@@ -413,7 +503,13 @@ export default function VendorDashboard() {
       stock: product.stock.toString(),
       tags: product.tags?.join(', ') || '',
       availableCountries: product.availableCountries?.join(', ') || '',
-      availableCities: product.availableCities?.join(', ') || ''
+      availableCities: product.availableCities?.join(', ') || '',
+      groupPrice: product.groupPrice?.toString() || '',
+      targetMembers: product.targetMembers?.toString() || '',
+      originCountry: product.originCountry || 'United Arab Emirates',
+      freshness: product.freshness || 'Fresh',
+      availabilityScope: product.availabilityScope || 'global',
+      availabilityDescription: product.availabilityDescription || '',
     });
     setVariationTypes(product.variationTypes || []);
     setVariationCombinations(product.variationCombinations || []);
@@ -468,7 +564,15 @@ export default function VendorDashboard() {
 
       <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Vendor Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-gray-900">Vendor Dashboard</h1>
+            {currentUser.isTopRated && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 rounded-full border border-amber-100 animate-pulse">
+                <Award className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Top-Rated Vendor</span>
+              </div>
+            )}
+          </div>
           <p className="text-gray-500 mt-2">Manage your store: {currentUser.storeName}</p>
         </div>
         
@@ -492,6 +596,24 @@ export default function VendorDashboard() {
             Orders
           </button>
           <button 
+            onClick={() => setActiveTab('subscriptions')}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'subscriptions' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Subscriptions
+          </button>
+          <button 
+            onClick={() => setActiveTab('groups')}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'groups' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Group Buys
+          </button>
+          <button 
+            onClick={() => setActiveTab('investments')}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'investments' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Investments
+          </button>
+          <button 
             onClick={() => setActiveTab('profile')}
             className={`px-6 py-2 rounded-md font-medium transition-colors ${activeTab === 'profile' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -511,8 +633,378 @@ export default function VendorDashboard() {
         </div>
       </div>
 
-      {/* Dashboard Tab */}
-      {activeTab === 'dashboard' && renderDashboard()}
+      {/* Subscriptions Tab */}
+      {activeTab === 'subscriptions' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900">Recurring Subscriptions</h2>
+            <p className="text-sm text-gray-500">Manage active subscriptions for your products.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Product</th>
+                  <th className="px-6 py-4 font-semibold">Customer</th>
+                  <th className="px-6 py-4 font-semibold">Frequency</th>
+                  <th className="px-6 py-4 font-semibold">Next Delivery</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {subscriptions.filter(s => s.vendorId === currentUser.id).map(sub => (
+                  <tr key={sub.id}>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <img src={sub.productImageUrl} alt={sub.productName} className="w-8 h-8 rounded-lg object-cover" />
+                        <span className="text-sm font-medium text-gray-900">{sub.productName}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{sub.customerId}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 capitalize">{sub.frequency}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{new Date(sub.nextDelivery).toLocaleDateString()}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
+                        sub.status === 'active' ? 'bg-green-100 text-green-700' :
+                        sub.status === 'paused' ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {sub.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Investments Tab */}
+      {activeTab === 'investments' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Investment Opportunities</h2>
+              <p className="text-sm text-gray-500">Raise capital for your products through community investment.</p>
+            </div>
+            <button 
+              onClick={() => setIsAddingInvestment(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-100"
+            >
+              <Plus className="w-4 h-4" />
+              Create Opportunity
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Capital Raised</p>
+              <h3 className="text-2xl font-bold text-gray-900">{formatPrice(0)}</h3>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Active Investors</p>
+              <h3 className="text-2xl font-bold text-gray-900">0</h3>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Profit Shared</p>
+              <h3 className="text-2xl font-bold text-gray-900">{formatPrice(0)}</h3>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                  <tr>
+                    <th className="px-6 py-4">Product</th>
+                    <th className="px-6 py-4">Goal</th>
+                    <th className="px-6 py-4">Progress</th>
+                    <th className="px-6 py-4">Profit Share</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {investmentOpportunities.filter(o => o.vendorId === currentUser.id).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-400 text-sm">
+                        No active investment opportunities. Click "Create Opportunity" to get started.
+                      </td>
+                    </tr>
+                  ) : (
+                    investmentOpportunities.filter(o => o.vendorId === currentUser.id).map(opportunity => (
+                      <tr key={opportunity.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center text-green-600">
+                              <Package className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900">{opportunity.productName}</p>
+                              <p className="text-xs text-gray-500">{opportunity.totalUnits} units goal</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-gray-900">{formatPrice(opportunity.fundingGoal)}</p>
+                          <p className="text-xs text-gray-500">Raised: {formatPrice(opportunity.currentFunding)}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="w-32">
+                            <div className="flex justify-between text-[10px] font-bold mb-1">
+                              <span>{Math.round((opportunity.currentFunding / opportunity.fundingGoal) * 100)}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-green-500 transition-all duration-500" 
+                                style={{ width: `${Math.min(100, (opportunity.currentFunding / opportunity.fundingGoal) * 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-bold text-green-600">{opportunity.profitSharingPct}%</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                            opportunity.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {opportunity.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Investment Opportunity Modal */}
+      {isAddingInvestment && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="p-8 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-2xl font-bold text-gray-900">New Investment Opportunity</h2>
+              <button 
+                onClick={() => setIsAddingInvestment(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await createInvestmentOpportunity({
+                  ...investmentFormData,
+                  fundingGoal: parseFloat(investmentFormData.fundingGoal),
+                  totalUnits: parseInt(investmentFormData.totalUnits),
+                  profitSharingPct: parseFloat(investmentFormData.profitSharingPct),
+                  tiers: investmentFormData.tiers.map(t => ({
+                    ...t,
+                    amount: parseFloat(t.amount),
+                    returnPct: parseFloat(t.returnPct),
+                    estimatedEarnings: parseFloat(t.estimatedEarnings)
+                  }))
+                });
+                setIsAddingInvestment(false);
+                setInvestmentFormData({
+                  productId: '',
+                  fundingGoal: '',
+                  totalUnits: '',
+                  profitSharingPct: '',
+                  riskLevel: 'medium',
+                  tiers: [
+                    { name: 'Basic', amount: '', returnPct: '', estimatedEarnings: '' },
+                    { name: 'Standard', amount: '', returnPct: '', estimatedEarnings: '' },
+                    { name: 'Premium', amount: '', returnPct: '', estimatedEarnings: '' }
+                  ]
+                });
+                setSuccessMessage('Investment opportunity created successfully!');
+              } catch (err: any) {
+                setErrorMessage(err.message || 'Failed to create opportunity.');
+              }
+            }} className="p-8 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Select Product</label>
+                  <select 
+                    required
+                    value={investmentFormData.productId}
+                    onChange={(e) => setInvestmentFormData(prev => ({ ...prev, productId: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                  >
+                    <option value="">Choose a product...</option>
+                    {myProducts.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Funding Goal ($)</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={investmentFormData.fundingGoal}
+                    onChange={(e) => setInvestmentFormData(prev => ({ ...prev, fundingGoal: e.target.value }))}
+                    placeholder="e.g. 5000"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Total Units to Produce</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={investmentFormData.totalUnits}
+                    onChange={(e) => setInvestmentFormData(prev => ({ ...prev, totalUnits: e.target.value }))}
+                    placeholder="e.g. 500"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Profit Sharing %</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={investmentFormData.profitSharingPct}
+                    onChange={(e) => setInvestmentFormData(prev => ({ ...prev, profitSharingPct: e.target.value }))}
+                    placeholder="e.g. 15"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Risk Level</label>
+                  <select 
+                    value={investmentFormData.riskLevel}
+                    onChange={(e) => setInvestmentFormData(prev => ({ ...prev, riskLevel: e.target.value as any }))}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                  >
+                    <option value="low">Low Risk</option>
+                    <option value="medium">Medium Risk</option>
+                    <option value="high">High Risk</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-bold text-gray-900">Investment Tiers (3-Tier Model)</h4>
+                <div className="grid grid-cols-1 gap-4">
+                  {investmentFormData.tiers.map((tier, idx) => (
+                    <div key={idx} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-3 gap-4">
+                      <div className="col-span-3 font-bold text-sm text-gray-700">{tier.name} Tier</div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Amount ($)</label>
+                        <input 
+                          type="number" 
+                          required
+                          value={tier.amount}
+                          onChange={(e) => {
+                            const newTiers = [...investmentFormData.tiers];
+                            newTiers[idx].amount = e.target.value;
+                            setInvestmentFormData(prev => ({ ...prev, tiers: newTiers }));
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">ROI (%)</label>
+                        <input 
+                          type="number" 
+                          required
+                          value={tier.returnPct}
+                          onChange={(e) => {
+                            const newTiers = [...investmentFormData.tiers];
+                            newTiers[idx].returnPct = e.target.value;
+                            setInvestmentFormData(prev => ({ ...prev, tiers: newTiers }));
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Est. Earnings ($)</label>
+                        <input 
+                          type="number" 
+                          required
+                          value={tier.estimatedEarnings}
+                          onChange={(e) => {
+                            const newTiers = [...investmentFormData.tiers];
+                            newTiers[idx].estimatedEarnings = e.target.value;
+                            setInvestmentFormData(prev => ({ ...prev, tiers: newTiers }));
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-xl shadow-gray-200"
+              >
+                Launch Investment Opportunity
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+      {activeTab === 'groups' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900">Group Purchases</h2>
+            <p className="text-sm text-gray-500">Monitor active group buying campaigns.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
+            {groupPurchases.filter(g => g.vendorId === currentUser.id).map(group => (
+              <div key={group.id} className="border border-gray-100 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-4">
+                  <img src={group.productImageUrl} alt={group.productName} className="w-12 h-12 rounded-xl object-cover" />
+                  <div>
+                    <h3 className="font-bold text-gray-900 line-clamp-1">{group.productName}</h3>
+                    <p className="text-xs text-gray-500">Ends: {new Date(group.expiresAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <div className="flex justify-between text-xs font-bold mb-2">
+                    <span>Progress</span>
+                    <span>{group.currentMembers}/{group.targetMembers}</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-green-600 transition-all duration-500" 
+                      style={{ width: `${(group.currentMembers / group.targetMembers) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                    group.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {group.status}
+                  </span>
+                  <p className="font-bold text-gray-900">{formatPrice(group.price, group.currency)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deletingProductId && (
@@ -611,7 +1103,7 @@ export default function VendorDashboard() {
                 setIsAddingProduct(!isAddingProduct);
                 if (!isAddingProduct) {
                   setEditingProduct(null);
-                  setFormData({ name: '', description: '', price: '', category: 'Fresh Items', imageUrl: '', stock: '', tags: '', availableCountries: '', availableCities: '' });
+                  setFormData({ name: '', description: '', price: '', currency: 'USD', category: 'Fresh Items', imageUrl: '', stock: '', tags: '', availableCountries: '', availableCities: '', groupPrice: '', targetMembers: '', availabilityScope: 'global', availabilityDescription: '' });
                 }
               }}
               className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -631,11 +1123,10 @@ export default function VendorDashboard() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Category</label>
                   <select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                    <option value="Fresh Items">Fresh Items</option>
-                    <option value="Meat">Meat</option>
-                    <option value="Groceries">Groceries</option>
-                    <option value="Dairy">Dairy</option>
-                    <option value="Bakery">Bakery</option>
+                    <option value="">Select Category</option>
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -669,9 +1160,75 @@ export default function VendorDashboard() {
                   <label className="text-sm font-medium text-gray-700">Available Cities (comma-separated, for Fresh Items)</label>
                   <input type="text" name="availableCities" value={formData.availableCities} onChange={handleInputChange} placeholder="e.g., New York, Los Angeles" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Origin Country</label>
+                  <select name="originCountry" value={formData.originCountry} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="">Select Country</option>
+                    {COUNTRIES.map(country => (
+                      <option key={country} value={country}>{country}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Freshness Level</label>
+                  <select name="freshness" value={formData.freshness} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="">Select Freshness</option>
+                    {FRESHNESS_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Availability Scope</label>
+                  <select name="availabilityScope" value={formData.availabilityScope} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="global">Global Availability</option>
+                    <option value="country">Country-Level Availability</option>
+                    <option value="local">Local Region (Specific Cities)</option>
+                  </select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Availability/Delivery Description</label>
+                  <input type="text" name="availabilityDescription" value={formData.availabilityDescription} onChange={handleInputChange} placeholder="e.g., Available in California only or Ships across UAE and Saudi Arabia" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+                </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-gray-700">Image URL</label>
                   <input type="url" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} placeholder="https://example.com/image.jpg" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+                </div>
+
+                {/* Group Purchase Configuration */}
+                <div className="md:col-span-2 p-6 border border-blue-100 rounded-2xl bg-blue-50/50 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-5 h-5 text-blue-600" />
+                    <h4 className="text-lg font-bold text-blue-900">Group Purchase Options</h4>
+                  </div>
+                  <p className="text-sm text-blue-700 mb-4">Enable collaborative buying for this product to boost sales with discounts.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-blue-900">Group Discount Price</label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        min="0" 
+                        name="groupPrice" 
+                        value={formData.groupPrice} 
+                        onChange={handleInputChange} 
+                        placeholder="e.g., 15.99"
+                        className="w-full px-4 py-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-blue-900">Target Members</label>
+                      <input 
+                        type="number" 
+                        min="2" 
+                        name="targetMembers" 
+                        value={formData.targetMembers} 
+                        onChange={handleInputChange} 
+                        placeholder="e.g., 5"
+                        className="w-full px-4 py-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Variations Section */}

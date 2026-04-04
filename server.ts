@@ -52,7 +52,53 @@ db.exec(`
     availableCountries TEXT,
     availableCities TEXT,
     variationTypes TEXT,
-    variationCombinations TEXT
+    variationCombinations TEXT,
+    originCountry TEXT,
+    freshness TEXT,
+    groupPrice REAL,
+    targetMembers INTEGER,
+    availabilityScope TEXT DEFAULT 'global',
+    availabilityDescription TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    id TEXT PRIMARY KEY,
+    customerId TEXT,
+    productId TEXT,
+    productName TEXT,
+    vendorId TEXT,
+    vendorName TEXT,
+    frequency TEXT, -- 'daily', 'weekly', 'monthly'
+    quantity INTEGER,
+    price REAL,
+    currency TEXT,
+    status TEXT DEFAULT 'active', -- 'active', 'paused', 'cancelled'
+    nextDelivery TEXT,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS group_purchases (
+    id TEXT PRIMARY KEY,
+    productId TEXT,
+    productName TEXT,
+    vendorId TEXT,
+    vendorName TEXT,
+    targetMembers INTEGER DEFAULT 5,
+    currentMembers INTEGER DEFAULT 0,
+    price REAL,
+    currency TEXT,
+    expiresAt TEXT,
+    status TEXT DEFAULT 'open', -- 'open', 'completed', 'expired'
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS group_members (
+    id TEXT PRIMARY KEY,
+    groupPurchaseId TEXT,
+    customerId TEXT,
+    customerName TEXT,
+    customerProfileImage TEXT,
+    joinedAt TEXT
   );
 
   -- Migration: Add currency column if it doesn't exist
@@ -104,6 +150,68 @@ db.exec(`
     timestamp TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS investment_opportunities (
+    id TEXT PRIMARY KEY,
+    productId TEXT,
+    productName TEXT,
+    vendorId TEXT,
+    fundingGoal REAL,
+    currentFunding REAL DEFAULT 0,
+    totalUnits INTEGER,
+    profitSharingPct REAL,
+    riskLevel TEXT DEFAULT 'medium',
+    status TEXT DEFAULT 'active',
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS investment_tiers (
+    id TEXT PRIMARY KEY,
+    opportunityId TEXT,
+    name TEXT,
+    amount REAL,
+    returnPct REAL,
+    estimatedEarnings REAL
+  );
+
+  CREATE TABLE IF NOT EXISTS investments (
+    id TEXT PRIMARY KEY,
+    opportunityId TEXT,
+    productId TEXT,
+    productName TEXT,
+    investorId TEXT,
+    tierId TEXT,
+    tierName TEXT,
+    amount REAL,
+    expectedReturnPct REAL,
+    earnedSoFar REAL DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS investor_wallets (
+    userId TEXT PRIMARY KEY,
+    balance REAL DEFAULT 0,
+    totalEarned REAL DEFAULT 0,
+    updatedAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    amount REAL,
+    type TEXT, -- 'investment', 'earning', 'withdrawal', 'deposit'
+    description TEXT,
+    createdAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS product_sales_stats (
+    productId TEXT,
+    month TEXT, -- 'YYYY-MM'
+    unitsSold INTEGER DEFAULT 0,
+    revenue REAL DEFAULT 0,
+    PRIMARY KEY (productId, month)
+  );
+
   CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     senderId TEXT,
@@ -149,7 +257,15 @@ try {
     { table: 'orders', name: 'paymentMethod', type: 'TEXT' },
     { table: 'orders', name: 'currency', type: 'TEXT DEFAULT \'USD\'' },
     { table: 'reviews', name: 'isVerifiedPurchase', type: 'INTEGER DEFAULT 0' },
-    { table: 'order_items', name: 'currency', type: 'TEXT DEFAULT \'USD\'' }
+    { table: 'order_items', name: 'currency', type: 'TEXT DEFAULT \'USD\'' },
+    { table: 'products', name: 'originCountry', type: 'TEXT' },
+    { table: 'products', name: 'freshness', type: 'TEXT' },
+    { table: 'products', name: 'groupPrice', type: 'REAL' },
+    { table: 'products', name: 'targetMembers', type: 'INTEGER' },
+    { table: 'products', name: 'availabilityScope', type: 'TEXT DEFAULT \'global\'' },
+    { table: 'products', name: 'availabilityDescription', type: 'TEXT' },
+    { table: 'users', name: 'isTopRated', type: 'INTEGER DEFAULT 0' },
+    { table: 'group_members', name: 'customerProfileImage', type: 'TEXT' }
   ];
 
   for (const col of requiredColumns) {
@@ -338,8 +454,14 @@ async function startServer() {
     const totalVendors = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('vendor') as any;
     const pendingVendors = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ? AND status = ?').get('vendor', 'pending') as any;
     
+    // Commission is 5% of delivered sales
+    const commissionRate = 0.05;
+    const totalRevenue = totalSales.total || 0;
+    const totalCommission = totalRevenue * commissionRate;
+    
     res.json({
-      totalRevenue: totalSales.total || 0,
+      totalRevenue,
+      totalCommission,
       totalCustomers: totalUsers.count,
       totalVendors: totalVendors.count,
       pendingVendors: pendingVendors.count
@@ -397,6 +519,27 @@ async function startServer() {
     res.json(customers);
   });
 
+  app.get('/api/admin/investments', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const opportunities = db.prepare('SELECT * FROM investment_opportunities').all();
+    const investments = db.prepare('SELECT * FROM investments').all();
+    res.json({ opportunities, investments });
+  });
+
+  app.get('/api/admin/reviews', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const reviews = db.prepare('SELECT * FROM reviews ORDER BY createdAt DESC').all();
+    res.json(reviews);
+  });
+
+  app.delete('/api/admin/reviews/:id', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    db.prepare('DELETE FROM reviews WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+    io.emit('products_updated');
+    io.emit('vendors_updated');
+  });
+
   app.delete('/api/admin/users/:id', authenticateToken, (req: any, res) => {
     if (req.user.role !== 'admin') return res.sendStatus(403);
     db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
@@ -440,14 +583,50 @@ async function startServer() {
 
   // Products
   app.get('/api/products', (req, res) => {
-    const stmt = db.prepare(`
+    const { category, minPrice, maxPrice, halal, freshness, origin, q, userCountry, userCity, availableInMyLocation } = req.query;
+    let query = `
       SELECT 
         p.*,
+        v.isTopRated as vendorIsTopRated,
         (SELECT AVG(rating) FROM reviews WHERE productId = p.id) as rating,
         (SELECT COUNT(*) FROM reviews WHERE productId = p.id) as reviewCount
       FROM products p
-    `);
-    const products = stmt.all().map((p: any) => ({
+      LEFT JOIN users v ON p.vendorId = v.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (category && category !== 'All') {
+      query += ' AND p.category = ?';
+      params.push(category);
+    }
+    if (minPrice) {
+      query += ' AND p.price >= ?';
+      params.push(Number(minPrice));
+    }
+    if (maxPrice) {
+      query += ' AND p.price <= ?';
+      params.push(Number(maxPrice));
+    }
+    if (halal === 'true') {
+      query += ' AND p.isHalalCertified = 1';
+    }
+    if (freshness && freshness !== 'All') {
+      query += ' AND p.freshness = ?';
+      params.push(freshness);
+    }
+    if (origin && origin !== 'All Countries') {
+      query += ' AND p.originCountry = ?';
+      params.push(origin);
+    }
+    if (q) {
+      query += ' AND (p.name LIKE ? OR p.description LIKE ? OR p.tags LIKE ?)';
+      const search = `%${q}%`;
+      params.push(search, search, search);
+    }
+
+    const stmt = db.prepare(query);
+    let products = stmt.all(...params).map((p: any) => ({
       ...p,
       isHalalCertified: Boolean(p.isHalalCertified),
       currency: p.currency || 'USD',
@@ -457,22 +636,258 @@ async function startServer() {
       variationTypes: JSON.parse(p.variationTypes || '[]'),
       variationCombinations: JSON.parse(p.variationCombinations || '[]'),
       rating: p.rating || 0,
-      reviewCount: p.reviewCount || 0
+      reviewCount: p.reviewCount || 0,
+      availabilityScope: p.availabilityScope || 'global'
     }));
+
+    // Location-based filtering in JS for complex logic
+    if (availableInMyLocation === 'true' && userCountry) {
+      const normalizedUserCountry = String(userCountry).toLowerCase().trim();
+      const normalizedUserCity = userCity ? String(userCity).toLowerCase().trim() : '';
+
+      products = products.filter((p: any) => {
+        if (p.availabilityScope === 'global') return true;
+        
+        const countries = (p.availableCountries || []).map((c: string) => c.toLowerCase().trim());
+        const cities = (p.availableCities || []).map((c: string) => c.toLowerCase().trim());
+        
+        if (p.availabilityScope === 'country') {
+          return countries.includes(normalizedUserCountry);
+        }
+        
+        if (p.availabilityScope === 'local') {
+          return countries.includes(normalizedUserCountry) && (normalizedUserCity ? cities.includes(normalizedUserCity) : true);
+        }
+        
+        return true;
+      });
+    }
+
     res.json(products);
+  });
+
+  // Subscriptions
+  app.get('/api/subscriptions', authenticateToken, (req: any, res) => {
+    const stmt = db.prepare('SELECT * FROM subscriptions WHERE customerId = ? OR vendorId = ?');
+    const subs = stmt.all(req.user.id, req.user.id);
+    res.json(subs);
+  });
+
+  app.post('/api/subscriptions', authenticateToken, (req: any, res) => {
+    const { productId, frequency, quantity } = req.body;
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId) as any;
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    if (product.vendorId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot purchase your own product.' });
+    }
+
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+    const nextDelivery = new Date();
+    if (frequency === 'daily') nextDelivery.setDate(nextDelivery.getDate() + 1);
+    else if (frequency === 'weekly') nextDelivery.setDate(nextDelivery.getDate() + 7);
+    else if (frequency === 'monthly') nextDelivery.setMonth(nextDelivery.getMonth() + 1);
+
+    const stmt = db.prepare(`
+      INSERT INTO subscriptions (id, customerId, productId, productName, vendorId, vendorName, frequency, quantity, price, currency, nextDelivery, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(id, req.user.id, productId, product.name, product.vendorId, product.vendorName, frequency, quantity, product.price, product.currency, nextDelivery.toISOString(), createdAt);
+    
+    res.json({ id, status: 'active' });
+  });
+
+  app.put('/api/subscriptions/:id', authenticateToken, (req: any, res) => {
+    const { status } = req.body;
+    const stmt = db.prepare('UPDATE subscriptions SET status = ? WHERE id = ? AND (customerId = ? OR vendorId = ?)');
+    const result = stmt.run(status, req.params.id, req.user.id, req.user.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Subscription not found' });
+    res.json({ success: true });
+  });
+
+  // Helper to complete a group purchase
+  const completeGroupPurchase = (groupId: string) => {
+    const group = db.prepare('SELECT * FROM group_purchases WHERE id = ?').get(groupId) as any;
+    if (!group || group.status !== 'open') return;
+
+    const members = db.prepare('SELECT * FROM group_members WHERE groupPurchaseId = ?').all(groupId) as any[];
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(group.productId) as any;
+
+    db.transaction(() => {
+      // Update group status
+      db.prepare("UPDATE group_purchases SET status = 'completed' WHERE id = ?").run(groupId);
+
+      // Create orders for each member
+      for (const member of members) {
+        const orderId = uuidv4();
+        const createdAt = new Date().toISOString();
+        const user = db.prepare('SELECT name, email, lastShippingDetails FROM users WHERE id = ?').get(member.customerId) as any;
+        let shippingDetails = {};
+        if (user.lastShippingDetails) {
+          try {
+            shippingDetails = JSON.parse(user.lastShippingDetails);
+          } catch (e) {
+            console.error('Failed to parse shipping details', e);
+          }
+        } else {
+          // Use basic profile info if no shipping details yet
+          shippingDetails = {
+            fullName: user.name,
+            email: user.email,
+            address: '',
+            city: '',
+            state: '',
+            country: '',
+            zipCode: '',
+            phone: ''
+          };
+        }
+
+        db.prepare(`
+          INSERT INTO orders (id, customerId, customerName, vendorId, vendorName, status, totalAmount, currency, createdAt, shippingDetails, paymentMethod)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(orderId, member.customerId, user.name, group.vendorId, group.vendorName, 'confirmed', group.price, group.currency, createdAt, JSON.stringify(shippingDetails), 'card');
+
+        db.prepare(`
+          INSERT INTO order_items (id, orderId, productId, productName, price, currency, quantity, selectedVariations, imageUrl)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), orderId, group.productId, group.productName, group.price, group.currency, 1, '{}', product?.imageUrl || '');
+
+        db.prepare('INSERT INTO order_history (id, orderId, status, description, timestamp) VALUES (?, ?, ?, ?, ?)')
+          .run(uuidv4(), orderId, 'confirmed', 'Order confirmed via successful Group Purchase', createdAt);
+
+        // Notify customer
+        db.prepare('INSERT INTO notifications (id, userId, title, message, type, orderId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(uuidv4(), member.customerId, 'Group Purchase Successful!', `The group purchase for ${group.productName} is complete! Your order has been confirmed.`, 'group_success', orderId, createdAt);
+      }
+
+      // Notify vendor
+      db.prepare('INSERT INTO notifications (id, userId, title, message, type, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(uuidv4(), group.vendorId, 'Group Purchase Completed', `Group purchase for ${group.productName} (#${groupId.slice(0, 8)}) has been successfully completed with ${group.targetMembers} members.`, 'group_vendor_success', new Date().toISOString());
+    })();
+
+    io.emit('orders_updated');
+    io.emit('notifications_updated');
+    io.emit('group_purchases_updated');
+  };
+
+  // Helper to expire a group purchase
+  const expireGroupPurchase = (groupId: string) => {
+    const group = db.prepare('SELECT * FROM group_purchases WHERE id = ?').get(groupId) as any;
+    if (!group || group.status !== 'open') return;
+
+    const members = db.prepare('SELECT * FROM group_members WHERE groupPurchaseId = ?').all(groupId) as any[];
+
+    db.transaction(() => {
+      db.prepare("UPDATE group_purchases SET status = 'expired' WHERE id = ?").run(groupId);
+
+      // Notify members about refund
+      for (const member of members) {
+        db.prepare('INSERT INTO notifications (id, userId, title, message, type, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(uuidv4(), member.customerId, 'Group Purchase Expired', `The group purchase for ${group.productName} did not reach its target. A refund has been issued to your original payment method.`, 'group_expired', new Date().toISOString());
+      }
+    })();
+
+    io.emit('notifications_updated');
+    io.emit('group_purchases_updated');
+  };
+
+  // Periodic check for expired groups
+  setInterval(() => {
+    const now = new Date().toISOString();
+    const expiredGroups = db.prepare("SELECT id FROM group_purchases WHERE status = 'open' AND expiresAt < ?").all(now) as any[];
+    for (const g of expiredGroups) {
+      expireGroupPurchase(g.id);
+    }
+  }, 60000); // Every minute
+
+  // Group Purchases
+  app.get('/api/group-purchases', (req, res) => {
+    const groups = db.prepare("SELECT * FROM group_purchases WHERE status = 'open'").all() as any[];
+    const groupsWithMembers = groups.map(g => {
+      const members = db.prepare('SELECT * FROM group_members WHERE groupPurchaseId = ?').all(g.id);
+      return { ...g, members };
+    });
+    res.json(groupsWithMembers);
+  });
+
+  app.post('/api/group-purchases', authenticateToken, (req: any, res) => {
+    const { productId, targetMembers, durationHours } = req.body;
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId) as any;
+    if (!product || !product.groupPrice) return res.status(400).json({ error: 'Product not eligible for group purchase' });
+
+    if (product.vendorId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot purchase your own product.' });
+    }
+
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + (durationHours || 24));
+
+    const stmt = db.prepare(`
+      INSERT INTO group_purchases (id, productId, productName, vendorId, vendorName, targetMembers, currentMembers, price, currency, expiresAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const targetCount = product.targetMembers || targetMembers || 5;
+    stmt.run(id, productId, product.name, product.vendorId, product.vendorName, targetCount, 1, product.groupPrice, product.currency, expiresAt.toISOString(), createdAt);
+
+    const memberId = uuidv4();
+    const user = db.prepare('SELECT name, profileImage FROM users WHERE id = ?').get(req.user.id) as any;
+    db.prepare('INSERT INTO group_members (id, groupPurchaseId, customerId, customerName, customerProfileImage, joinedAt) VALUES (?, ?, ?, ?, ?, ?)').run(memberId, id, req.user.id, user.name, user.profileImage || null, createdAt);
+
+    res.json({ id, status: 'open' });
+    io.emit('group_purchases_updated');
+  });
+
+  app.post('/api/group-purchases/:id/join', authenticateToken, (req: any, res) => {
+    const group = db.prepare('SELECT * FROM group_purchases WHERE id = ?').get(req.params.id) as any;
+    if (!group || group.status !== 'open') return res.status(400).json({ error: 'Group not available' });
+
+    if (group.vendorId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot purchase your own product.' });
+    }
+
+    const alreadyJoined = db.prepare('SELECT * FROM group_members WHERE groupPurchaseId = ? AND customerId = ?').get(group.id, req.user.id);
+    if (alreadyJoined) return res.status(400).json({ error: 'Already joined' });
+
+    const memberId = uuidv4();
+    const joinedAt = new Date().toISOString();
+    const user = db.prepare('SELECT name, profileImage FROM users WHERE id = ?').get(req.user.id) as any;
+    db.prepare('INSERT INTO group_members (id, groupPurchaseId, customerId, customerName, customerProfileImage, joinedAt) VALUES (?, ?, ?, ?, ?, ?)').run(memberId, group.id, req.user.id, user.name, user.profileImage || null, joinedAt);
+
+    const newCount = group.currentMembers + 1;
+    db.prepare('UPDATE group_purchases SET currentMembers = ? WHERE id = ?').run(newCount, group.id);
+
+    if (newCount >= group.targetMembers) {
+      completeGroupPurchase(group.id);
+    } else {
+      io.emit('group_purchases_updated');
+      // Notify other members that someone joined
+      const members = db.prepare('SELECT customerId FROM group_members WHERE groupPurchaseId = ? AND customerId != ?').all(group.id, req.user.id) as any[];
+      for (const m of members) {
+        db.prepare('INSERT INTO notifications (id, userId, title, message, type, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(uuidv4(), m.customerId, 'Someone joined your group!', `${user.name} joined the group for ${group.productName}. Only ${group.targetMembers - newCount} spots left!`, 'group_join', new Date().toISOString());
+      }
+      io.emit('notifications_updated');
+    }
+
+    res.json({ success: true });
   });
 
   app.post('/api/products', authenticateToken, (req: any, res) => {
     const p = req.body;
     const id = uuidv4();
     const stmt = db.prepare(`
-      INSERT INTO products (id, vendorId, vendorName, name, description, price, currency, category, imageUrl, stock, tags, isHalalCertified, availableCountries, availableCities, variationTypes, variationCombinations)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (id, vendorId, vendorName, name, description, price, currency, category, imageUrl, stock, tags, isHalalCertified, availableCountries, availableCities, variationTypes, variationCombinations, groupPrice, targetMembers, originCountry, freshness, availabilityScope, availabilityDescription)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       id, req.user.id, p.vendorName, p.name, p.description, p.price, p.currency || 'USD', p.category, p.imageUrl, p.stock,
       JSON.stringify(p.tags || []), p.isHalalCertified ? 1 : 0, JSON.stringify(p.availableCountries || []),
-      JSON.stringify(p.availableCities || []), JSON.stringify(p.variationTypes || []), JSON.stringify(p.variationCombinations || [])
+      JSON.stringify(p.availableCities || []), JSON.stringify(p.variationTypes || []), JSON.stringify(p.variationCombinations || []),
+      p.groupPrice || null, p.targetMembers || null, p.originCountry || null, p.freshness || null, p.availabilityScope || 'global', p.availabilityDescription || null
     );
     res.json({ id });
     io.emit('products_updated');
@@ -481,13 +896,14 @@ async function startServer() {
   app.put('/api/products/:id', authenticateToken, (req: any, res) => {
     const p = req.body;
     const stmt = db.prepare(`
-      UPDATE products SET name = ?, description = ?, price = ?, currency = ?, category = ?, imageUrl = ?, stock = ?, tags = ?, isHalalCertified = ?, availableCountries = ?, availableCities = ?, variationTypes = ?, variationCombinations = ?
+      UPDATE products SET name = ?, description = ?, price = ?, currency = ?, category = ?, imageUrl = ?, stock = ?, tags = ?, isHalalCertified = ?, availableCountries = ?, availableCities = ?, variationTypes = ?, variationCombinations = ?, groupPrice = ?, targetMembers = ?, originCountry = ?, freshness = ?, availabilityScope = ?, availabilityDescription = ?
       WHERE id = ? AND vendorId = ?
     `);
     stmt.run(
       p.name, p.description, p.price, p.currency || 'USD', p.category, p.imageUrl, p.stock,
       JSON.stringify(p.tags || []), p.isHalalCertified ? 1 : 0, JSON.stringify(p.availableCountries || []),
       JSON.stringify(p.availableCities || []), JSON.stringify(p.variationTypes || []), JSON.stringify(p.variationCombinations || []),
+      p.groupPrice || null, p.targetMembers || null, p.originCountry || null, p.freshness || null, p.availabilityScope || 'global', p.availabilityDescription || null,
       req.params.id, req.user.id
     );
     res.json({ success: true });
@@ -526,6 +942,11 @@ async function startServer() {
 
   app.post('/api/orders', authenticateToken, (req: any, res) => {
     const { vendorId, vendorName, items, totalAmount, shippingDetails, paymentMethod } = req.body;
+
+    if (vendorId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot purchase your own product.' });
+    }
+
     const orderId = uuidv4();
     const createdAt = new Date().toISOString();
 
@@ -548,17 +969,22 @@ async function startServer() {
     const updateShippingStmt = db.prepare('UPDATE users SET lastShippingDetails = ? WHERE id = ?');
     updateShippingStmt.run(JSON.stringify(shippingDetails), req.user.id);
 
-    // Insert items
+    // Insert items and update stock
     const itemStmt = db.prepare(`
       INSERT INTO order_items (id, orderId, productId, productName, price, currency, quantity, selectedVariations, imageUrl)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    
+    const updateStockStmt = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
     
     for (const item of items) {
       itemStmt.run(
         uuidv4(), orderId, item.productId, item.productName, item.price, item.currency || 'USD', item.quantity,
         JSON.stringify(item.selectedVariations || {}), item.imageUrl
       );
+      
+      // Decrement stock
+      updateStockStmt.run(item.quantity, item.productId);
     }
 
     // Insert initial history
@@ -596,7 +1022,7 @@ async function startServer() {
       historyStmt.run(uuidv4(), orderId, status, description || `Order status updated to ${status}`, now);
       
       // Create notification for customer
-      const order = db.prepare('SELECT customerId, vendorName FROM orders WHERE id = ?').get(orderId) as any;
+      const order = db.prepare('SELECT customerId, vendorName, totalAmount, currency FROM orders WHERE id = ?').get(orderId) as any;
       if (order) {
         const notifStmt = db.prepare('INSERT INTO notifications (id, userId, title, message, type, orderId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
         notifStmt.run(
@@ -608,6 +1034,60 @@ async function startServer() {
           orderId,
           now
         );
+
+        // Handle profit distribution if order is delivered
+        if (status === 'delivered') {
+          const items = db.prepare('SELECT productId, price, quantity FROM order_items WHERE orderId = ?').all(orderId) as any[];
+          const month = now.substring(0, 7); // YYYY-MM
+
+          for (const item of items) {
+            // Update sales stats
+            db.prepare(`
+              INSERT INTO product_sales_stats (productId, month, unitsSold, revenue)
+              VALUES (?, ?, ?, ?)
+              ON CONFLICT(productId, month) DO UPDATE SET
+                unitsSold = unitsSold + ?,
+                revenue = revenue + ?
+            `).run(item.productId, month, item.quantity, item.price * item.quantity, item.quantity, item.price * item.quantity);
+
+            // Find active investments for this product
+            const opportunity = db.prepare("SELECT id, profitSharingPct FROM investment_opportunities WHERE productId = ? AND status = 'active'").get(item.productId) as any;
+            if (opportunity) {
+              const investments = db.prepare("SELECT * FROM investments WHERE opportunityId = ? AND status = 'active'").all(opportunity.id) as any[];
+              
+              // Total profit to share for this item (simplified: sharing a percentage of revenue)
+              const totalRevenue = item.price * item.quantity;
+              const totalToShare = totalRevenue * (opportunity.profitSharingPct / 100);
+
+              // Distribute proportionally to current funding share
+              const totalFunding = db.prepare('SELECT currentFunding FROM investment_opportunities WHERE id = ?').get(opportunity.id) as any;
+              
+              if (totalFunding && totalFunding.currentFunding > 0) {
+                for (const inv of investments) {
+                  const investorShare = (inv.amount / totalFunding.currentFunding) * totalToShare;
+                  
+                  // Update investment earnedSoFar
+                  db.prepare('UPDATE investments SET earnedSoFar = earnedSoFar + ? WHERE id = ?').run(investorShare, inv.id);
+                  
+                  // Update investor wallet
+                  db.prepare(`
+                    INSERT INTO investor_wallets (userId, balance, totalEarned, updatedAt)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(userId) DO UPDATE SET
+                      balance = balance + ?,
+                      totalEarned = totalEarned + ?,
+                      updatedAt = ?
+                  `).run(inv.investorId, investorShare, investorShare, now, investorShare, investorShare, now);
+                  
+                  // Record transaction
+                  db.prepare('INSERT INTO wallet_transactions (id, userId, amount, type, description, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+                    .run(uuidv4(), inv.investorId, investorShare, 'earning', `Profit share from ${item.productName} sale`, now);
+                }
+              }
+            }
+          }
+          io.emit('wallet_updated');
+        }
       }
 
       res.json({ success: true });
@@ -789,6 +1269,186 @@ async function startServer() {
     io.to(req.user.id).emit('new_message', message);
     
     res.json(message);
+  });
+
+  // Recalculate Top-Rated Vendors
+  app.post('/api/admin/recalculate-top-rated', authenticateToken, (req: any, res) => {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+
+    try {
+      const vendors = db.prepare("SELECT id FROM users WHERE role = 'vendor'").all() as { id: string }[];
+      
+      for (const vendor of vendors) {
+        // Get average rating
+        const ratingResult = db.prepare(`
+          SELECT AVG(rating) as avgRating 
+          FROM reviews r
+          JOIN products p ON r.productId = p.id
+          WHERE p.vendorId = ?
+        `).get(vendor.id) as { avgRating: number | null };
+        
+        // Get total orders
+        const orderCountResult = db.prepare(`
+          SELECT COUNT(*) as count FROM orders WHERE vendorId = ?
+        `).get(vendor.id) as { count: number };
+        
+        // Get completion rate
+        const deliveredCountResult = db.prepare(`
+          SELECT COUNT(*) as count FROM orders WHERE vendorId = ? AND status = 'delivered'
+        `).get(vendor.id) as { count: number };
+        
+        const avgRating = ratingResult.avgRating || 0;
+        const totalOrders = orderCountResult.count;
+        const completionRate = totalOrders > 0 ? (deliveredCountResult.count / totalOrders) : 0;
+        
+        // Criteria for Top-Rated
+        const isTopRated = avgRating >= 4.0 && totalOrders >= 5 && completionRate >= 0.8;
+        
+        db.prepare("UPDATE users SET isTopRated = ? WHERE id = ?").run(isTopRated ? 1 : 0, vendor.id);
+      }
+      
+      res.json({ success: true, message: 'Top-rated status recalculated for all vendors' });
+    } catch (error) {
+      console.error('Recalculation error:', error);
+      res.status(500).json({ error: 'Failed to recalculate' });
+    }
+  });
+
+  // Investment Marketplace
+  app.get('/api/investments/opportunities', (req, res) => {
+    const opportunities = db.prepare("SELECT * FROM investment_opportunities WHERE status = 'active'").all() as any[];
+    const opportunitiesWithTiers = opportunities.map(o => {
+      const tiers = db.prepare('SELECT * FROM investment_tiers WHERE opportunityId = ?').all(o.id);
+      const salesStats = db.prepare('SELECT * FROM product_sales_stats WHERE productId = ? ORDER BY month DESC LIMIT 6').all(o.productId);
+      return { ...o, tiers, salesStats };
+    });
+    res.json(opportunitiesWithTiers);
+  });
+
+  app.post('/api/investments/opportunities', authenticateToken, (req: any, res) => {
+    console.log('POST /api/investments/opportunities', JSON.stringify(req.body, null, 2));
+    const { productId, fundingGoal, totalUnits, profitSharingPct, tiers, riskLevel } = req.body;
+    
+    try {
+      const product = db.prepare('SELECT name, vendorId FROM products WHERE id = ?').get(productId) as any;
+      
+      if (!product || product.vendorId !== req.user.id) {
+        console.error('Not authorized or product not found', { productId, vendorId: req.user.id });
+        return res.status(403).json({ error: 'Not authorized or product not found' });
+      }
+
+      const id = uuidv4();
+      const createdAt = new Date().toISOString();
+      
+      db.transaction(() => {
+        db.prepare(`
+          INSERT INTO investment_opportunities (id, productId, productName, vendorId, fundingGoal, totalUnits, profitSharingPct, riskLevel, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, productId, product.name, req.user.id, fundingGoal, totalUnits, profitSharingPct, riskLevel || 'medium', createdAt);
+
+        const tierStmt = db.prepare(`
+          INSERT INTO investment_tiers (id, opportunityId, name, amount, returnPct, estimatedEarnings)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const tier of tiers) {
+          tierStmt.run(uuidv4(), id, tier.name, tier.amount, tier.returnPct, tier.estimatedEarnings);
+        }
+      })();
+
+      res.json({ success: true, id });
+      io.emit('investments_updated');
+    } catch (error: any) {
+      console.error('Error creating investment opportunity:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/investments/invest', authenticateToken, (req: any, res) => {
+    const { opportunityId, tierId } = req.body;
+    const opportunity = db.prepare('SELECT * FROM investment_opportunities WHERE id = ?').get(opportunityId) as any;
+    const tier = db.prepare('SELECT * FROM investment_tiers WHERE id = ?').get(tierId) as any;
+
+    if (!opportunity || !tier) return res.status(404).json({ error: 'Not found' });
+    if (opportunity.status !== 'active') return res.status(400).json({ error: 'Opportunity not active' });
+
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+
+    db.transaction(() => {
+      // Record investment
+      db.prepare(`
+        INSERT INTO investments (id, opportunityId, productId, productName, investorId, tierId, tierName, amount, expectedReturnPct, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, opportunityId, opportunity.productId, opportunity.productName, req.user.id, tierId, tier.name, tier.amount, tier.returnPct, createdAt);
+
+      // Update opportunity funding
+      db.prepare('UPDATE investment_opportunities SET currentFunding = currentFunding + ? WHERE id = ?').run(tier.amount, opportunityId);
+
+      // Record transaction (negative balance for now, assuming external payment or wallet balance)
+      db.prepare('INSERT INTO wallet_transactions (id, userId, amount, type, description, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(uuidv4(), req.user.id, -tier.amount, 'investment', `Investment in ${opportunity.productName} (${tier.name})`, createdAt);
+
+      // Update wallet balance (if using internal wallet)
+      db.prepare(`
+        INSERT INTO investor_wallets (userId, balance, updatedAt)
+        VALUES (?, ?, ?)
+        ON CONFLICT(userId) DO UPDATE SET
+          balance = balance - ?,
+          updatedAt = ?
+      `).run(req.user.id, -tier.amount, createdAt, tier.amount, createdAt);
+    })();
+
+    res.json({ success: true, id });
+    io.emit('investments_updated');
+    io.emit('wallet_updated');
+  });
+
+  app.get('/api/investments/my-investments', authenticateToken, (req: any, res) => {
+    const investments = db.prepare('SELECT * FROM investments WHERE investorId = ? ORDER BY createdAt DESC').all(req.user.id);
+    res.json(investments);
+  });
+
+  app.get('/api/vendor/investments', authenticateToken, (req: any, res) => {
+    if (req.user.role !== 'vendor') return res.status(403).json({ error: 'Vendor only' });
+    
+    const opportunities = db.prepare('SELECT id FROM investment_opportunities WHERE vendorId = ?').all(req.user.id) as { id: string }[];
+    const opportunityIds = opportunities.map(o => o.id);
+    
+    if (opportunityIds.length === 0) return res.json([]);
+    
+    const placeholders = opportunityIds.map(() => '?').join(',');
+    const investments = db.prepare(`SELECT * FROM investments WHERE opportunityId IN (${placeholders}) ORDER BY createdAt DESC`).all(...opportunityIds);
+    res.json(investments);
+  });
+
+  app.get('/api/investments/wallet', authenticateToken, (req: any, res) => {
+    const wallet = db.prepare('SELECT * FROM investor_wallets WHERE userId = ?').get(req.user.id) as any;
+    const transactions = db.prepare('SELECT * FROM wallet_transactions WHERE userId = ? ORDER BY createdAt DESC').all(req.user.id);
+    res.json({ ...wallet, transactions });
+  });
+
+  app.post('/api/investments/withdraw', authenticateToken, (req: any, res) => {
+    const { amount } = req.body;
+    const wallet = db.prepare('SELECT balance FROM investor_wallets WHERE userId = ?').get(req.user.id) as any;
+
+    if (!wallet || wallet.balance < amount) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+
+    db.transaction(() => {
+      db.prepare('UPDATE investor_wallets SET balance = balance - ?, updatedAt = ? WHERE userId = ?').run(amount, createdAt, req.user.id);
+      db.prepare('INSERT INTO wallet_transactions (id, userId, amount, type, description, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(uuidv4(), req.user.id, -amount, 'withdrawal', 'Withdrawal to bank account', createdAt);
+    })();
+
+    res.json({ success: true });
+    io.emit('wallet_updated');
   });
 
   // Catch-all for API routes to ensure JSON response
